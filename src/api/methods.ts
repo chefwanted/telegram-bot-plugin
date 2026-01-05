@@ -266,6 +266,93 @@ export class ApiMethods {
     return this.client.call<boolean>('sendChatAction', params as unknown as Record<string, unknown>);
   }
 
+  /**
+   * Stream content to message via editing and new messages
+   * Used for streaming long responses
+   */
+  async editMessageTextStream(
+    chatId: number | string,
+    messageId: number,
+    text: string,
+    options: {
+      maxLength?: number;
+      parse_mode?: 'Markdown' | 'MarkdownV2' | 'HTML';
+      onChunkSent?: (chunk: string, remaining: string, index: number) => void;
+    } = {}
+  ): Promise<void> {
+    const { maxLength = 4000, parse_mode, onChunkSent } = options;
+
+    if (text.length <= maxLength) {
+      // Fits in one message, just edit
+      await this.editMessageText({
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        parse_mode,
+      });
+      return;
+    }
+
+    // Need to split into chunks
+    const chunks = this.splitIntoChunks(text, maxLength);
+
+    // Edit with first chunk + continuation indicator
+    await this.editMessageText({
+      chat_id: chatId,
+      message_id: messageId,
+      text: chunks[0] + '\n\n_...continuing..._',
+      parse_mode,
+    });
+
+    // Send remaining chunks as new messages
+    for (let i = 1; i < chunks.length; i++) {
+      await this.sendMessage({
+        chat_id: chatId,
+        text: chunks[i],
+        parse_mode,
+      });
+
+      const remaining = chunks.slice(i + 1).join('\n');
+      onChunkSent?.(chunks[i], remaining, i);
+    }
+  }
+
+  /**
+   * Helper: Split text into chunks respecting Telegram limits
+   */
+  private splitIntoChunks(text: string, maxLength: number): string[] {
+    const chunks: string[] = [];
+    const lines = text.split('\n');
+    let current = '';
+
+    for (const line of lines) {
+      if ((current + line).length > maxLength) {
+        if (current) {
+          chunks.push(current);
+        }
+
+        // If single line exceeds limit, split it
+        if (line.length > maxLength) {
+          const lineChunks = Math.ceil(line.length / maxLength);
+          for (let j = 0; j < lineChunks; j++) {
+            chunks.push(line.substring(j * maxLength, (j + 1) * maxLength));
+          }
+          current = '';
+        } else {
+          current = line + '\n';
+        }
+      } else {
+        current += (current ? '\n' : '') + line;
+      }
+    }
+
+    if (current) {
+      chunks.push(current);
+    }
+
+    return chunks;
+  }
+
   // ==========================================================================
   // Formatting Helpers
   // ==========================================================================

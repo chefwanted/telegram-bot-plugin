@@ -18,9 +18,14 @@ export interface CallbackHandler {
   handle(callbackQuery: CallbackQuery): Promise<void>;
 
   /**
-   * Register callback handler
+   * Register callback handler for exact match
    */
   registerCallback(data: string, handler: CallbackFn): void;
+
+  /**
+   * Register callback handler for prefix match (e.g., "conf:" matches "conf_123:approve")
+   */
+  registerPrefixCallback(prefix: string, handler: CallbackFn): void;
 
   /**
    * Unregister callback handler
@@ -42,6 +47,7 @@ export type CallbackFn = (
 
 export class BotCallbackHandler implements CallbackHandler {
   private callbacks: Map<string, CallbackFn> = new Map();
+  private prefixCallbacks: Map<string, CallbackFn> = new Map();
   private logger = createLogger({ prefix: 'CallbackHandler' });
 
   constructor(private api: ApiMethods) {}
@@ -59,7 +65,18 @@ export class BotCallbackHandler implements CallbackHandler {
 
     this.logger.debug('Callback received', { data });
 
-    const handler = this.callbacks.get(data);
+    // First try exact match
+    let handler = this.callbacks.get(data);
+
+    // If no exact match, try prefix match
+    if (!handler) {
+      for (const [prefix, prefixHandler] of this.prefixCallbacks.entries()) {
+        if (data.startsWith(prefix)) {
+          handler = prefixHandler;
+          break;
+        }
+      }
+    }
 
     if (handler) {
       try {
@@ -86,6 +103,14 @@ export class BotCallbackHandler implements CallbackHandler {
   registerCallback(data: string, handler: CallbackFn): void {
     this.callbacks.set(data, handler);
     this.logger.debug('Callback registered', { data });
+  }
+
+  /**
+   * Register callback handler for prefix match
+   */
+  registerPrefixCallback(prefix: string, handler: CallbackFn): void {
+    this.prefixCallbacks.set(prefix, handler);
+    this.logger.debug('Prefix callback registered', { prefix });
   }
 
   /**

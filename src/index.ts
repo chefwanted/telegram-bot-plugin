@@ -12,6 +12,8 @@ import { registerDefaultHandlers } from './events';
 import { createCommandHandler } from './bot/handlers/command';
 import { createCallbackHandler } from './bot/handlers/callback';
 import { SimpleMessageHandler } from './bot/handlers/message';
+import { createStreamingMessageHandler } from './bot/handlers/streaming-message';
+import { getConfirmationManager } from './streaming/confirmation';
 import {
   helpCommand,
   DEFAULT_COMMANDS,
@@ -716,66 +718,21 @@ class Plugin implements ITelegramBotPlugin {
     // Setup callback handler
     const callbackHandler = createCallbackHandler(api);
 
+    // Register confirmation callbacks for streaming handler
+    // Confirmation IDs start with "conf_" prefix
+    const confirmationManager = getConfirmationManager(api);
+    callbackHandler.registerPrefixCallback('conf_', async (callbackQuery) => {
+      const callbackData = callbackQuery.data;
+      if (callbackData) {
+        await confirmationManager.handleCallback(callbackData);
+      }
+    });
+
     // Register agent callbacks
     registerAgentCallbacks(callbackHandler);
 
-    // Setup message handler - uses Claude Code CLI for all non-command messages
-    const messageHandler = new SimpleMessageHandler(api, async (message) => {
-      trackMessage(String(message.chat.id));
-
-      if (message.text && !message.text.startsWith('/')) {
-        // Non-command messages go to Claude Code CLI
-        try {
-          // Show typing indicator
-          await api.sendChatAction({ chat_id: message.chat.id, action: 'typing' });
-
-          // Process with Claude Code
-          const response = await this.claudeCodeService.processMessage(
-            String(message.chat.id),
-            message.text
-          );
-
-          // Send response (split if too long for Telegram)
-          const maxLength = 4000;
-          let text = response.text;
-
-          while (text.length > 0) {
-            const chunk = text.substring(0, maxLength);
-            text = text.substring(maxLength);
-
-            await api.sendMessage({
-              chat_id: message.chat.id,
-              text: chunk,
-              parse_mode: 'Markdown',
-            });
-          }
-
-          // Show session info if it's a new session
-          if (response.isNewSession) {
-            await api.sendMessage({
-              chat_id: message.chat.id,
-              text: `_💡 Nieuwe sessie gestart. Gebruik /claude voor sessiebeheer._`,
-              parse_mode: 'Markdown',
-            });
-          }
-        } catch (error) {
-          const err = error as Error;
-          this.logger.error('Claude Code error', { error: err.message });
-
-          // User-friendly error message
-          let errorMsg = '❌ Er ging iets mis met Claude.';
-          if (err.message.includes('timeout') || err.message.includes('TIMEOUT')) {
-            errorMsg = '⏱️ Claude reageerde niet op tijd. Probeer het opnieuw.';
-          } else if (err.message.includes('already being processed') || err.message.includes('verwerkt')) {
-            errorMsg = '⏳ ' + err.message;
-          } else if (err.message.includes('spawn') || err.message.includes('ENOENT')) {
-            errorMsg = '❌ Claude CLI niet gevonden. Is `claude` geïnstalleerd?';
-          }
-
-          await api.sendMessage({ chat_id: message.chat.id, text: errorMsg });
-        }
-      }
-    });
+    // Setup message handler - use StreamingMessageHandler for interactive responses
+    const messageHandler = createStreamingMessageHandler(api, this.claudeCodeService);
 
     // Set handlers on bot
     this.bot.setCommandHandler(commandHandler);

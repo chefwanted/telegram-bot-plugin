@@ -35,6 +35,34 @@ export interface SessionData {
   preferences?: UserPreferences;
   /** Tijdelijke data voor huidige interactie */
   temporary?: Record<string, unknown>;
+  /** Streaming state for interactive responses */
+  streamingState?: StreamingState;
+}
+
+// =============================================================================
+// Streaming State
+// =============================================================================
+
+export interface StreamingState {
+  /** Current streaming status */
+  status: 'idle' | 'thinking' | 'tool_use' | 'response' | 'confirmation' | 'complete' | 'error';
+  /** Current message ID being edited */
+  currentMessageId?: number;
+  /** Current tool being used */
+  currentTool?: string;
+  /** Pending confirmation action ID */
+  pendingConfirmation?: string;
+  /** History of tools used in current session */
+  toolHistory: ToolUseHistoryItem[];
+}
+
+export interface ToolUseHistoryItem {
+  /** Tool name */
+  name: string;
+  /** Tool input */
+  input: Record<string, unknown>;
+  /** Timestamp when tool was used */
+  timestamp: Date;
 }
 
 // =============================================================================
