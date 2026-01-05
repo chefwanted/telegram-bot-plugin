@@ -103,6 +103,9 @@ import {
 // Custom Tools
 import { customToolCommand } from './features/custom-tools';
 
+// CLI Commands
+import { claudeCliCommand, omoCommand } from './bot/commands/cli';
+
 // Version & update info
 import { formatVersionMessage, formatUpdateMessage, formatChangelogMessage } from './utils/version';
 
@@ -590,6 +593,20 @@ class Plugin implements ITelegramBotPlugin {
     commandHandler.registerCommand('/tool', async (message, args) => {
       trackCommand('/tool', String(message.chat.id));
       await customToolCommand(api, message, args);
+    });
+
+    // ==========================================================================
+    // CLI Commands (Direct shortcuts)
+    // ==========================================================================
+
+    commandHandler.registerCommand('/claude-cli', async (message, args) => {
+      trackCommand('/claude-cli', String(message.chat.id));
+      await claudeCliCommand(api, message, args);
+    });
+
+    commandHandler.registerCommand('/omo', async (message, args) => {
+      trackCommand('/omo', String(message.chat.id));
+      await omoCommand(api, message, args);
     });
 
     // ==========================================================================

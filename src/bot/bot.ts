@@ -413,6 +413,8 @@ export class TelegramBot {
         { command: 'claude', description: '🤖 Claude Code Chat' },
         { command: 'claude_status', description: '📊 Session status' },
         { command: 'claude_clear', description: '🗑️ Nieuwe sessie' },
+        { command: 'claude-cli', description: '⚡ Claude CLI direct' },
+        { command: 'omo', description: '🔧 OpenCode CLI direct' },
 
         // Developer Tools
         { command: 'dev', description: '🛠️ Developer help' },

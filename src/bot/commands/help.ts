@@ -21,6 +21,8 @@ const COMMANDS = `
 /claude - Start Claude Code chat sessie
 /claude_status - Toon huidige sessie info
 /claude_clear - Start nieuwe sessie
+/claude-cli <vraag> - Claude CLI direct (snel)
+/omo <opdracht> - OpenCode CLI direct (code schrijven)
 
 *Developer Tools*
 /dev - Developer mode help en overzicht
@@ -121,6 +123,8 @@ export const DEFAULT_COMMANDS: Record<string, string> = {
   '/claude': 'Claude Code Chat',
   '/claude_status': 'Session status',
   '/claude_clear': 'Nieuwe sessie',
+  '/claude-cli': 'Claude CLI direct',
+  '/omo': 'OpenCode CLI direct',
   '/dev': 'Developer help',
   '/project': 'Project info',
   '/files': 'Bestanden bekijken',
