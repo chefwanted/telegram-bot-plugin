@@ -1,0 +1,407 @@
+/**
+ * Claude Code CLI Service
+ * Voert Claude Code uit via CLI en beheert sessies
+ */
+
+import { spawn } from 'child_process';
+import type {
+  ClaudeCodeOptions,
+  ClaudeCodeSession,
+  ClaudeCodeResponse,
+  ClaudeCodeError,
+  ClaudeCliMessage,
+  ClaudeCliResult,
+  SessionStorage,
+} from './types';
+import { createSessionStorage, FileSessionStorage } from './sessions';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger({ prefix: 'ClaudeCode' });
+
+// =============================================================================
+// Claude Code Service
+// =============================================================================
+
+export class ClaudeCodeService {
+  private options: Required<ClaudeCodeOptions>;
+  private storage: SessionStorage;
+  private processing: Set<string> = new Set(); // chatIds currently processing
+
+  constructor(options: ClaudeCodeOptions = {}) {
+    this.options = {
+      workingDir: options.workingDir || process.cwd(),
+      cliBinary: options.cliBinary || 'claude',
+      model: options.model || '',
+      maxTokens: options.maxTokens || 16000,
+      sessionStoragePath: options.sessionStoragePath || '/tmp/claude-telegram-sessions.json',
+      timeout: options.timeout || 120000,
+      allowedTools: options.allowedTools || [],
+      deniedTools: options.deniedTools || [],
+      systemPrompt: options.systemPrompt || '',
+    };
+
+    this.storage = createSessionStorage('file', { path: this.options.sessionStoragePath });
+    logger.info('Claude Code service initialized', { workingDir: this.options.workingDir });
+  }
+
+  // ===========================================================================
+  // Main Message Processing
+  // ===========================================================================
+
+  /**
+   * Process a message from Telegram using Claude Code CLI
+   */
+  async processMessage(chatId: string, message: string): Promise<ClaudeCodeResponse> {
+    // Prevent concurrent processing for same chat
+    if (this.processing.has(chatId)) {
+      throw this.createError('TIMEOUT', 'Er wordt al een bericht verwerkt voor deze chat. Even geduld...');
+    }
+
+    this.processing.add(chatId);
+
+    try {
+      // Get or create session
+      let session = await this.storage.getActiveSession(chatId);
+      const isNewSession = !session;
+
+      if (!session) {
+        session = await this.createNewSession(chatId);
+      }
+
+      // Run Claude CLI
+      const startTime = Date.now();
+      const result = await this.runClaudeCli(message, session);
+      const durationMs = Date.now() - startTime;
+
+      // Update session
+      session.messageCount++;
+      session.lastActivityAt = new Date();
+      await this.storage.saveSession(session);
+
+      return {
+        text: result.text,
+        sessionId: session.id,
+        isNewSession,
+        cost: result.cost,
+        durationMs,
+        exitCode: result.exitCode,
+      };
+    } finally {
+      this.processing.delete(chatId);
+    }
+  }
+
+  // ===========================================================================
+  // Session Management
+  // ===========================================================================
+
+  /**
+   * Create a new session for a chat
+   */
+  async createNewSession(chatId: string, name?: string): Promise<ClaudeCodeSession> {
+    const sessionId = this.generateSessionId();
+    const session: ClaudeCodeSession = {
+      id: sessionId,
+      chatId,
+      name: name || `Sessie ${new Date().toLocaleDateString('nl-NL')}`,
+      createdAt: new Date(),
+      lastActivityAt: new Date(),
+      messageCount: 0,
+      workingDir: this.options.workingDir,
+      isActive: true,
+    };
+
+    await this.storage.saveSession(session);
+    await this.storage.setActiveSession(chatId, sessionId);
+
+    logger.info(`New session created for chat ${chatId}`, { sessionId });
+    return session;
+  }
+
+  /**
+   * Start a completely new session (forget previous)
+   */
+  async startNewSession(chatId: string, name?: string): Promise<ClaudeCodeSession> {
+    return this.createNewSession(chatId, name);
+  }
+
+  /**
+   * Switch to an existing session
+   */
+  async switchSession(chatId: string, sessionId: string): Promise<ClaudeCodeSession | null> {
+    const session = await this.storage.getSession(sessionId);
+    if (!session || session.chatId !== chatId) {
+      return null;
+    }
+
+    await this.storage.setActiveSession(chatId, sessionId);
+    session.isActive = true;
+    session.lastActivityAt = new Date();
+    await this.storage.saveSession(session);
+
+    logger.info(`Switched to session ${sessionId} for chat ${chatId}`);
+    return session;
+  }
+
+  /**
+   * Get current active session for a chat
+   */
+  async getActiveSession(chatId: string): Promise<ClaudeCodeSession | null> {
+    return this.storage.getActiveSession(chatId);
+  }
+
+  /**
+   * Get all sessions for a chat
+   */
+  async getSessionsForChat(chatId: string): Promise<ClaudeCodeSession[]> {
+    return this.storage.getSessionsForChat(chatId);
+  }
+
+  /**
+   * Delete a session
+   */
+  async deleteSession(sessionId: string): Promise<boolean> {
+    return this.storage.deleteSession(sessionId);
+  }
+
+  /**
+   * End current session (just deactivates, doesn't delete)
+   */
+  async endSession(chatId: string): Promise<boolean> {
+    const session = await this.storage.getActiveSession(chatId);
+    if (!session) return false;
+
+    session.isActive = false;
+    await this.storage.saveSession(session);
+    return true;
+  }
+
+  /**
+   * Get session stats
+   */
+  async getStats(): Promise<{
+    totalSessions: number;
+    activeSessions: number;
+    totalMessages: number;
+  }> {
+    const all = await this.storage.getAllSessions();
+    return {
+      totalSessions: all.length,
+      activeSessions: all.filter(s => s.isActive).length,
+      totalMessages: all.reduce((sum, s) => sum + s.messageCount, 0),
+    };
+  }
+
+  // ===========================================================================
+  // CLI Execution
+  // ===========================================================================
+
+  /**
+   * Run Claude CLI with message
+   */
+  private async runClaudeCli(
+    message: string,
+    session: ClaudeCodeSession
+  ): Promise<{ text: string; cost?: { inputTokens: number; outputTokens: number }; exitCode: number }> {
+    return new Promise((resolve, reject) => {
+      const args = this.buildCliArgs(message, session);
+
+      logger.debug('Running Claude CLI', { args: args.filter(a => !a.includes(message)) });
+
+      const proc = spawn(this.options.cliBinary, args, {
+        cwd: session.workingDir,
+        env: { ...process.env },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      proc.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      proc.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      // Timeout
+      const timeout = setTimeout(() => {
+        proc.kill('SIGTERM');
+        reject(this.createError('TIMEOUT', `Claude CLI timed out after ${this.options.timeout}ms`));
+      }, this.options.timeout);
+
+      proc.on('close', (code) => {
+        clearTimeout(timeout);
+
+        if (code !== 0 && !stdout) {
+          logger.error('Claude CLI error', { code, stderr });
+          reject(this.createError('CLI_ERROR', stderr || `Claude CLI exited with code ${code}`, code ?? undefined));
+          return;
+        }
+
+        try {
+          const result = this.parseCliOutput(stdout);
+          resolve({
+            text: result.text,
+            cost: result.cost,
+            exitCode: code || 0,
+          });
+        } catch (error) {
+          logger.error('Failed to parse CLI output', { error, stdout });
+          // Return raw output if parsing fails
+          resolve({
+            text: stdout.trim() || stderr.trim() || 'Geen output van Claude.',
+            exitCode: code || 0,
+          });
+        }
+      });
+
+      proc.on('error', (error) => {
+        clearTimeout(timeout);
+        logger.error('Failed to spawn Claude CLI', { error });
+        reject(this.createError('CLI_ERROR', `Failed to run claude: ${error.message}`));
+      });
+    });
+  }
+
+  /**
+   * Build CLI arguments
+   */
+  private buildCliArgs(message: string, session: ClaudeCodeSession): string[] {
+    const args: string[] = [
+      '--print',           // Print response only (no interactive)
+      '--output-format', 'json',  // JSON output for parsing
+    ];
+
+    // Resume session if we have one with messages
+    if (session.messageCount > 0) {
+      args.push('--resume', session.id);
+    }
+
+    // Model override
+    if (this.options.model) {
+      args.push('--model', this.options.model);
+    }
+
+    // Max tokens
+    if (this.options.maxTokens) {
+      args.push('--max-turns', '1'); // Single turn for Telegram
+    }
+
+    // Allowed tools
+    for (const tool of this.options.allowedTools) {
+      args.push('--allowedTools', tool);
+    }
+
+    // Denied tools
+    for (const tool of this.options.deniedTools) {
+      args.push('--disallowedTools', tool);
+    }
+
+    // System prompt
+    if (this.options.systemPrompt) {
+      args.push('--system-prompt', this.options.systemPrompt);
+    }
+
+    // The message itself
+    args.push('--', message);
+
+    return args;
+  }
+
+  /**
+   * Parse JSON output from Claude CLI
+   */
+  private parseCliOutput(output: string): { text: string; cost?: { inputTokens: number; outputTokens: number } } {
+    const lines = output.trim().split('\n');
+    let text = '';
+    let cost: { inputTokens: number; outputTokens: number } | undefined;
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      try {
+        const msg: ClaudeCliMessage = JSON.parse(line);
+
+        if (msg.type === 'assistant' && msg.message?.content) {
+          // Extract text from content
+          if (typeof msg.message.content === 'string') {
+            text += msg.message.content;
+          } else if (Array.isArray(msg.message.content)) {
+            for (const block of msg.message.content) {
+              if (block.type === 'text' && block.text) {
+                text += block.text;
+              }
+            }
+          }
+        }
+
+        if (msg.type === 'result') {
+          const result = msg as unknown as ClaudeCliResult;
+          if (result.result) {
+            text = result.result;
+          }
+          // Note: Claude CLI gives cost in USD, not tokens directly
+          // We can estimate or just skip for now
+        }
+      } catch {
+        // Not JSON, might be plain text fallback
+        text += line + '\n';
+      }
+    }
+
+    return { text: text.trim(), cost };
+  }
+
+  // ===========================================================================
+  // Helpers
+  // ===========================================================================
+
+  private generateSessionId(): string {
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substring(2, 8);
+    return `tg-${timestamp}-${random}`;
+  }
+
+  private createError(code: ClaudeCodeError['code'], message: string, exitCode?: number): ClaudeCodeError {
+    const error = new Error(message) as ClaudeCodeError;
+    error.code = code;
+    error.exitCode = exitCode;
+    return error;
+  }
+
+  /**
+   * Cleanup on shutdown
+   */
+  destroy(): void {
+    if (this.storage instanceof FileSessionStorage) {
+      this.storage.destroy();
+    }
+    logger.info('Claude Code service destroyed');
+  }
+}
+
+// =============================================================================
+// Factory
+// =============================================================================
+
+let defaultService: ClaudeCodeService | null = null;
+
+export function createClaudeCodeService(options?: ClaudeCodeOptions): ClaudeCodeService {
+  return new ClaudeCodeService(options);
+}
+
+export function getClaudeCodeService(): ClaudeCodeService {
+  if (!defaultService) {
+    defaultService = createClaudeCodeService();
+  }
+  return defaultService;
+}
+
+export function resetClaudeCodeService(): void {
+  if (defaultService) {
+    defaultService.destroy();
+    defaultService = null;
+  }
+}

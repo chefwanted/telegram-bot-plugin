@@ -16,6 +16,10 @@ export class ReminderService {
   }
 
   start(): void {
+    // Prevent duplicate intervals
+    if (this.interval) {
+      return;
+    }
     // Check every 30 seconds
     this.interval = setInterval(() => {
       this.checkReminders();

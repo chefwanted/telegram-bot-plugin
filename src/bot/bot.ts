@@ -70,6 +70,7 @@ export class TelegramBot {
   private startedAt?: Date;
 
   private pollingTimer?: NodeJS.Timeout;
+  private pollInFlight = false;
   private messageHandler?: MessageHandler;
   private commandHandler?: CommandHandler;
   private callbackHandler?: CallbackHandler;
@@ -175,39 +176,61 @@ export class TelegramBot {
     this.state.isPolling = true;
     this.logger.debug('Started polling');
 
-    await this.poll();
+    // Start the polling loop
+    void this.pollLoop();
   }
 
   /**
-   * Poll voor updates
+   * Polling loop (robust, no recursive scheduling)
    */
-  private async poll(): Promise<void> {
-    while (this.state.isPolling && this.state.isRunning) {
-      try {
-        const updates = await this.getUpdates();
+  private async pollLoop(): Promise<void> {
+    // Prevent accidental multiple loops
+    if (this.pollInFlight) {
+      return;
+    }
+    this.pollInFlight = true;
 
-        if (updates.length > 0) {
-          for (const update of updates) {
-            await this.processUpdate(update);
+    try {
+      while (this.state.isPolling && this.state.isRunning) {
+        try {
+          const updates = await this.getUpdates();
+
+          if (updates.length > 0) {
+            for (const update of updates) {
+              if (!this.state.isPolling || !this.state.isRunning) break;
+              await this.processUpdate(update);
+            }
+          }
+        } catch (error) {
+          this.state.stats.totalErrors++;
+          this.logger.error('Polling error', { error });
+
+          // Stop on error unless explicitly configured not to
+          if (this.options?.polling?.stopOnError !== false) {
+            this.state.isPolling = false;
+            break;
           }
         }
-      } catch (error) {
-        this.state.stats.totalErrors++;
-        this.logger.error('Polling error', { error });
 
-        // Check if we should stop on error
-        if (this.options?.polling?.stopOnError !== false) {
+        if (!this.state.isPolling || !this.state.isRunning) {
           break;
         }
-      }
 
-      // Wait before next poll
-      if (this.state.isPolling && this.state.isRunning) {
         const interval = this.options?.polling?.interval || 300;
-        this.pollingTimer = setTimeout(() => this.poll(), interval);
-        break;
+        await this.delay(interval);
       }
+    } finally {
+      this.pollInFlight = false;
     }
+  }
+
+  /**
+   * Delay helper for polling loop
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => {
+      this.pollingTimer = setTimeout(resolve, ms);
+    });
   }
 
   /**
@@ -281,12 +304,9 @@ export class TelegramBot {
         await this.commandHandler.handle(message);
       }
     } else if (this.messageHandler) {
+      // Let the message handler handle non-command messages
+      // (Claude Code CLI integration is in the handler now)
       await this.messageHandler.handle(message);
-    }
-
-    // Also send to Z.ai service if not a command
-    if (this.zaiService && message.text && !message.text.startsWith('/')) {
-      await this.processWithZAI(message);
     }
   }
 
@@ -307,7 +327,6 @@ export class TelegramBot {
       const context: InlineContext = {
         query: inlineQuery.query || '',
         userId: inlineQuery.from.id,
-        chatId: inlineQuery.chat?.id,
       };
 
       const results = await routeInlineQuery(context);
@@ -384,11 +403,26 @@ export class TelegramBot {
   private async setupCommands(): Promise<void> {
     try {
       await this.api.setupCommands([
-        // Claude Commands
-        { command: 'start', description: 'Start de bot' },
-        { command: 'help', description: 'Help overzicht' },
-        { command: 'claude_status', description: 'Claude status' },
-        { command: 'claude_clear', description: 'Wis Claude geschiedenis' },
+        // Main Commands
+        { command: 'start', description: '🚀 Start de bot' },
+        { command: 'help', description: '❓ Help overzicht' },
+        { command: 'version', description: '📦 Versie & build info' },
+        { command: 'update', description: '🆕 Laatste wijzigingen' },
+        { command: 'changelog', description: '📜 Changelog' },
+        // Claude Code CLI
+        { command: 'claude', description: '🤖 Claude Code sessie beheer' },
+        { command: 'claude_status', description: '📊 Claude sessie status' },
+        { command: 'claude_clear', description: '🗑️ Beëindig sessie' },
+        // Developer Mode
+        { command: 'dev', description: '🛠️ Developer mode help' },
+        { command: 'project', description: '📂 Project openen/beheren' },
+        { command: 'files', description: '📄 Bestanden bekijken' },
+        { command: 'tree', description: '🌳 Directory structuur' },
+        { command: 'read', description: '👁️ Bestand lezen' },
+        { command: 'focus', description: '📎 Focus bestanden (AI context)' },
+        { command: 'code', description: '💻 Code met Z.ai' },
+        { command: 'patch', description: '📝 Patches beheren' },
+        { command: 'write', description: '✏️ Bestand schrijven' },
         // Notes
         { command: 'note', description: '📝 Notities beheren' },
         // Reminders
@@ -418,7 +452,7 @@ export class TelegramBot {
         { command: 'skills', description: '🎯 Jouw skills' },
         { command: 'leaderboard', description: '🏆 Leaderboard' },
         // System
-        { command: 'status', description: 'Bot status' },
+        { command: 'status', description: '⚙️ Bot status' },
       ], 'all_private_chats');
       this.logger.info('Bot commands registered');
     } catch (error) {

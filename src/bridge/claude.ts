@@ -43,6 +43,7 @@ export class ClaudeBridge {
   private sessionPath: string;
   private session!: ClaudeSession;
   private processing = false;
+  private pollInterval?: NodeJS.Timeout;
 
   constructor(
     private api: ApiMethods,
@@ -116,7 +117,7 @@ export class ClaudeBridge {
 
     // Poll every second
     this.processQueue();
-    setInterval(() => this.processQueue(), 1000);
+    this.pollInterval = setInterval(() => this.processQueue(), 1000);
   }
 
   /**
@@ -124,6 +125,11 @@ export class ClaudeBridge {
    */
   stopProcessing(): void {
     this.processing = false;
+
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = undefined;
+    }
     this.logger.info('Stopped processing queue');
   }
 
@@ -190,7 +196,14 @@ export class ClaudeBridge {
     return content
       .split('\n')
       .filter(line => line.trim())
-      .map(line => JSON.parse(line));
+      .map(line => {
+        const parsed = JSON.parse(line) as ClaudeMessage;
+        // JSON.parse converts Date to string; normalize to Date for in-process usage
+        if (parsed && (parsed as any).timestamp && typeof (parsed as any).timestamp === 'string') {
+          (parsed as any).timestamp = new Date((parsed as any).timestamp);
+        }
+        return parsed;
+      });
   }
 
   /**
@@ -303,11 +316,14 @@ export class ClaudeBridge {
     pending: number;
     total: number;
   } {
-    const messages = this.getPendingMessages();
+    const pendingMessages = this.getPendingMessages();
+    const totalMessages = fs.existsSync(this.queuePath)
+      ? fs.readFileSync(this.queuePath, 'utf-8').split('\n').filter(l => l.trim()).length
+      : 0;
     return {
       session: this.session,
-      pending: messages.length,
-      total: messages.length,
+      pending: pendingMessages.length,
+      total: totalMessages,
     };
   }
 

@@ -5,6 +5,8 @@
 
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import Parser from 'rss-parser';
+import * as https from 'https';
 import type { P2000Message, P2000ScraperOptions } from './types';
 import { isUtrechtRegion } from './filters';
 import { createLogger } from '../../utils/logger';
@@ -26,6 +28,12 @@ export interface P2000ScraperConfig {
   userAgent?: string;
   /** Base URL for P2000 feed */
   feedUrl?: string;
+  /** Optional fallback feed URL if primary fails */
+  fallbackFeedUrl?: string;
+  /** Allow insecure TLS (NOT recommended). Can be enabled via env for broken certs. */
+  allowInsecureTls?: boolean;
+  /** If true, apply Utrecht region filtering by default when no regions are provided (default: false) */
+  filterUtrechtByDefault?: boolean;
 }
 
 const DEFAULT_CONFIG: Required<P2000ScraperConfig> = {
@@ -33,7 +41,15 @@ const DEFAULT_CONFIG: Required<P2000ScraperConfig> = {
   maxCacheSize: 1000,
   requestTimeout: 15000,
   userAgent: 'Mozilla/5.0 (compatible; TelegramBot/1.0)',
-  feedUrl: 'https://www.p2000.nl/rss',
+  // Default feed chosen for reachability: in this environment p2000.nl may serve HTML.
+  // You can override with env vars for your preferred source.
+  feedUrl: process.env.P2000_FEED_URL || 'https://feeds.feedburner.com/p2000',
+  // Optional fallback source
+  fallbackFeedUrl: process.env.P2000_FALLBACK_FEED_URL || 'https://www.p2000.nl/rss',
+  allowInsecureTls: process.env.P2000_ALLOW_INSECURE_TLS === '1' || process.env.P2000_ALLOW_INSECURE_TLS === 'true',
+  filterUtrechtByDefault:
+    process.env.P2000_FILTER_UTRECHT_BY_DEFAULT === '1' ||
+    process.env.P2000_FILTER_UTRECHT_BY_DEFAULT === 'true',
 };
 
 // =============================================================================
@@ -45,9 +61,26 @@ export class P2000Scraper {
   private cache: P2000Message[] = [];
   private seenMessages = new Set<string>();
   private readonly config: Required<P2000ScraperConfig>;
+  private readonly rss: Parser;
+  private readonly httpsAgent?: https.Agent;
 
   constructor(config: P2000ScraperConfig = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+
+    // Optional insecure TLS support for environments where upstream certs are broken.
+    // Defaults to secure behavior.
+    if (this.config.allowInsecureTls) {
+      this.httpsAgent = new https.Agent({ rejectUnauthorized: false });
+      logger.warn('P2000 scraper is running with insecure TLS (rejectUnauthorized=false).');
+    }
+
+    this.rss = new Parser({
+      timeout: this.config.requestTimeout,
+      headers: {
+        'User-Agent': this.config.userAgent,
+        'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+      },
+    });
   }
 
   /**
@@ -100,39 +133,26 @@ export class P2000Scraper {
    * Fetch from P2000.nl RSS feed
    */
   private async fetchFromP2000NL(): Promise<P2000Message[]> {
-    const messages: P2000Message[] = [];
-
+    // 1) Prefer proper RSS parsing (handles namespaces/CDATA)
     try {
-      // Fetch the P2000.nl RSS feed
-      const response = await axios.get(this.config.feedUrl, {
-        timeout: this.config.requestTimeout,
-        headers: {
-          'User-Agent': this.config.userAgent,
-          'Accept': 'application/rss+xml, application/xml, text/xml',
-        },
-      });
+      const feed = await this.rss.parseURL(this.config.feedUrl);
+      const items = feed.items || [];
 
-      const $ = cheerio.load(response.data, { xmlMode: true });
-
-      $('item').each((_, element) => {
+      const messages: P2000Message[] = [];
+      for (const item of items) {
         try {
-          const $item = $(element);
-          const title = $item.find('title').text().trim();
-          const description = $item.find('description').text().trim();
-          const pubDate = $item.find('pubDate').text().trim();
-          const guid = $item.find('guid').text().trim();
+          const title = (item.title || '').trim();
+          const description = (item.contentSnippet || item.content || '').toString().trim();
+          const pubDate = (item.pubDate || item.isoDate || '').toString();
+          const guid = (item.guid || item.id || item.link || '').toString();
 
-          // Parse service type from title
+          if (!title && !description) continue;
+
           const service = this.parseService(title);
-
-          // Parse priority from title (Ambulance 1, Brandweer 2, etc.)
           const priority = this.parsePriority(title);
+          const location = this.parseLocation(`${title} ${description}`);
 
-          // Parse region/location
-          const location = this.parseLocation(title + ' ' + description);
-
-          // Create message
-          const message: P2000Message = {
+          messages.push({
             id: guid || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             timestamp: pubDate ? new Date(pubDate) : new Date(),
             region: location?.city || 'Onbekend',
@@ -140,19 +160,110 @@ export class P2000Scraper {
             priority,
             description: description || title,
             location,
-          };
-
-          messages.push(message);
+          });
         } catch (error) {
-          logger.warn('Error parsing P2000 item', { error });
+          logger.warn('Error parsing P2000 RSS item', { error });
         }
-      });
+      }
 
+      return messages;
     } catch (error) {
-      logger.error('Error fetching from P2000.nl', { error });
+      logger.warn('RSS parsing failed, trying XML/HTML fallback', { error });
     }
 
-    return messages;
+    // 1b) Try fallback RSS feed (if configured)
+    if (this.config.fallbackFeedUrl) {
+      try {
+        const feed = await this.rss.parseURL(this.config.fallbackFeedUrl);
+        const items = feed.items || [];
+
+        const messages: P2000Message[] = [];
+        for (const item of items) {
+          try {
+            const title = (item.title || '').trim();
+            const description = (item.contentSnippet || item.content || '').toString().trim();
+            const pubDate = (item.pubDate || item.isoDate || '').toString();
+            const guid = (item.guid || item.id || item.link || '').toString();
+
+            if (!title && !description) continue;
+
+            const service = this.parseService(title);
+            const priority = this.parsePriority(title);
+            const location = this.parseLocation(`${title} ${description}`);
+
+            messages.push({
+              id: guid || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              timestamp: pubDate ? new Date(pubDate) : new Date(),
+              region: location?.city || 'Onbekend',
+              service,
+              priority,
+              description: description || title,
+              location,
+            });
+          } catch (err) {
+            logger.warn('Error parsing fallback RSS item', { error: err });
+          }
+        }
+
+        return messages;
+      } catch (error) {
+        logger.warn('Fallback RSS parsing failed as well', { error });
+      }
+    }
+
+    // 2) Fallback: fetch and attempt XML parse; if HTML, attempt to scrape embedded RSS-like items
+    try {
+      const response = await axios.get(this.config.feedUrl, {
+        timeout: this.config.requestTimeout,
+        httpsAgent: this.httpsAgent,
+        headers: {
+          'User-Agent': this.config.userAgent,
+          'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+        },
+      });
+
+      const body = String(response.data);
+
+      // If it looks like XML RSS, parse with cheerio xmlMode
+      if (body.includes('<rss') || body.includes('<channel') || body.includes('<item')) {
+        const $ = cheerio.load(body, { xmlMode: true });
+        const messages: P2000Message[] = [];
+        $('item').each((_, element) => {
+          try {
+            const $item = $(element);
+            const title = $item.find('title').text().trim();
+            const description = $item.find('description').text().trim();
+            const pubDate = $item.find('pubDate').text().trim();
+            const guid = $item.find('guid').text().trim();
+            const service = this.parseService(title);
+            const priority = this.parsePriority(title);
+            const location = this.parseLocation(title + ' ' + description);
+            messages.push({
+              id: guid || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              timestamp: pubDate ? new Date(pubDate) : new Date(),
+              region: location?.city || 'Onbekend',
+              service,
+              priority,
+              description: description || title,
+              location,
+            });
+          } catch (err) {
+            logger.warn('Error parsing P2000 item (fallback xml)', { error: err });
+          }
+        });
+        return messages;
+      }
+
+      // HTML fallback: no reliable structure across variants; return empty
+      logger.warn('P2000 feed returned HTML, no usable items found', {
+        feedUrl: this.config.feedUrl,
+        sample: body.slice(0, 120),
+      });
+      return [];
+    } catch (error) {
+      logger.error('Error fetching from P2000.nl (fallback)', { error });
+      return [];
+    }
   }
 
   /**
@@ -260,12 +371,13 @@ export class P2000Scraper {
   private filterMessages(messages: P2000Message[], options: P2000ScraperOptions): P2000Message[] {
     let filtered = messages;
 
-    // Filter by Utrecht region by default
-    if (!options.regions || options.regions.length === 0) {
+    // Filter by Utrecht region by default (optional; depends on feed source)
+    if ((!options.regions || options.regions.length === 0) && this.config.filterUtrechtByDefault) {
       filtered = filtered.filter(m => isUtrechtRegion(m.description));
-    } else {
+    } else if (options.regions && options.regions.length > 0) {
+      const regions = options.regions;
       filtered = filtered.filter(m =>
-        options.regions!.some(region =>
+        regions.some(region =>
           m.description.toLowerCase().includes(region.toLowerCase()) ||
           m.region.toLowerCase().includes(region.toLowerCase())
         )

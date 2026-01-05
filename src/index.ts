@@ -25,6 +25,14 @@ import {
   claudeHelpCommand,
 } from './bot/commands/claude';
 import { ZAIService } from './zai';
+import { closeDatabase } from './database';
+
+// Claude Code CLI integration
+import {
+  ClaudeCodeService,
+  createClaudeCodeService,
+  routeClaudeCommand,
+} from './claude-code';
 
 // Features imports
 import { ReminderService, setReminderService } from './features/reminders';
@@ -110,6 +118,7 @@ import {
   p2000SubscribeCommand,
   p2000HelpCommand,
 } from './features/p2000';
+import { getP2000Notifier } from './features/p2000';
 
 // Skills
 import {
@@ -117,6 +126,22 @@ import {
   skillInfoCommand,
   leaderboardCommand,
 } from './features/skills';
+
+// Version & update info
+import { formatVersionMessage, formatUpdateMessage, formatChangelogMessage } from './utils/version';
+
+// Developer Mode
+import {
+  projectCommand,
+  filesCommand,
+  treeCommand,
+  readCommand,
+  focusCommand,
+  patchCommand,
+  writeCommand,
+  codeCommand,
+  devHelpCommand,
+} from './features/developer';
 
 // =============================================================================
 // Plugin Interface
@@ -149,7 +174,9 @@ class Plugin implements ITelegramBotPlugin {
   private logger: Logger;
   private config: PluginConfig;
   private zaiService?: ZAIService;
+  private claudeCodeService: ClaudeCodeService;
   private reminderService?: ReminderService;
+  private p2000Notifier = getP2000Notifier();
 
   constructor(config: PluginConfig) {
     this.config = config;
@@ -159,7 +186,17 @@ class Plugin implements ITelegramBotPlugin {
       format: config.options?.logging?.format,
     });
 
-    // Create Z.ai service if API key is available
+    // Create Claude Code service (main AI for chat)
+    this.claudeCodeService = createClaudeCodeService({
+      workingDir: process.env.CLAUDE_WORKING_DIR || process.cwd(),
+      cliBinary: process.env.CLAUDE_CLI_BINARY || 'claude',
+      model: process.env.CLAUDE_MODEL,
+      timeout: parseInt(process.env.CLAUDE_TIMEOUT || '120000', 10),
+      systemPrompt: process.env.CLAUDE_SYSTEM_PROMPT,
+    });
+    this.logger.info('Claude Code service initialized');
+
+    // Create Z.ai service as fallback if API key is available
     if (config.zaiApiKey) {
       this.zaiService = new ZAIService({
         apiKey: config.zaiApiKey,
@@ -215,6 +252,9 @@ class Plugin implements ITelegramBotPlugin {
       this.reminderService.start();
     }
 
+    // Start P2000 notifier (push notifications)
+    this.p2000Notifier.start(this.bot.apiMethods);
+
     // Start bot
     await this.bot.start();
 
@@ -236,8 +276,14 @@ class Plugin implements ITelegramBotPlugin {
       this.reminderService.stop();
     }
 
+    // Stop P2000 notifier
+    this.p2000Notifier.stop();
+
     // Stop bot
     await this.bot.stop();
+
+    // Destroy Claude Code service
+    this.claudeCodeService.destroy();
 
     // Destroy Z.ai service
     if (this.zaiService) {
@@ -246,6 +292,9 @@ class Plugin implements ITelegramBotPlugin {
 
     // Clear event handlers
     this.eventDispatcher.clear();
+
+    // Close database connection (if used)
+    closeDatabase();
 
     this.logger.info('Plugin stopped');
   }
@@ -286,30 +335,86 @@ class Plugin implements ITelegramBotPlugin {
       await claudeHelpCommand(api, message);
     });
 
+    commandHandler.registerCommand('/version', async (message, _args) => {
+      trackCommand('/version', String(message.chat.id));
+      await api.sendMessage({ chat_id: message.chat.id, text: formatVersionMessage() });
+    });
+
+    commandHandler.registerCommand('/update', async (message, _args) => {
+      trackCommand('/update', String(message.chat.id));
+      await api.sendMessage({ chat_id: message.chat.id, text: formatUpdateMessage() });
+    });
+
     commandHandler.registerCommand('/claude_status', async (message, _args) => {
       trackCommand('/claude-status', String(message.chat.id));
-      const service = this.bot.zaiServiceInstance;
-      if (service) {
-        const zaiInfo = service.getConversationInfo(String(message.chat.id));
-        const info = zaiInfo ? {
-          messageCount: zaiInfo.messageCount,
-          lastActivity: new Date(zaiInfo.lastAccessAt),
-        } : null;
-        await claudeStatusCommand(api, message, info);
-      } else {
-        await api.sendMessage({ chat_id: message.chat.id, text: '⚠️ Z.ai service is niet geconfigureerd.' });
-      }
+      // Use Claude Code service status
+      await routeClaudeCommand(api, message, ['status'], this.claudeCodeService);
     });
 
     commandHandler.registerCommand('/claude_clear', async (message, _args) => {
       trackCommand('/claude-clear', String(message.chat.id));
-      const service = this.bot.zaiServiceInstance;
-      if (service) {
-        service.clearConversation(String(message.chat.id));
-        await api.sendMessage({ chat_id: message.chat.id, text: '✅ Gespreksgeschiedenis gewist.' });
-      } else {
-        await api.sendMessage({ chat_id: message.chat.id, text: '⚠️ Claude service is niet geconfigureerd.' });
-      }
+      // End current Claude Code session (creates new one on next message)
+      await routeClaudeCommand(api, message, ['end'], this.claudeCodeService);
+    });
+
+    // /claude command - full session management
+    commandHandler.registerCommand('/claude', async (message, args) => {
+      trackCommand('/claude', String(message.chat.id));
+      await routeClaudeCommand(api, message, args, this.claudeCodeService);
+    });
+
+    commandHandler.registerCommand('/code', async (message, args) => {
+      trackCommand('/code', String(message.chat.id));
+      await codeCommand(api, message, args, this.bot.zaiServiceInstance);
+    });
+
+    // ==========================================================================
+    // Developer Mode Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/dev', async (message, _args) => {
+      trackCommand('/dev', String(message.chat.id));
+      await devHelpCommand(api, message);
+    });
+
+    commandHandler.registerCommand('/project', async (message, args) => {
+      trackCommand('/project', String(message.chat.id));
+      await projectCommand(api, message, args);
+    });
+
+    commandHandler.registerCommand('/files', async (message, args) => {
+      trackCommand('/files', String(message.chat.id));
+      await filesCommand(api, message, args);
+    });
+
+    commandHandler.registerCommand('/tree', async (message, args) => {
+      trackCommand('/tree', String(message.chat.id));
+      await treeCommand(api, message, args);
+    });
+
+    commandHandler.registerCommand('/read', async (message, args) => {
+      trackCommand('/read', String(message.chat.id));
+      await readCommand(api, message, args);
+    });
+
+    commandHandler.registerCommand('/focus', async (message, args) => {
+      trackCommand('/focus', String(message.chat.id));
+      await focusCommand(api, message, args);
+    });
+
+    commandHandler.registerCommand('/patch', async (message, args) => {
+      trackCommand('/patch', String(message.chat.id));
+      await patchCommand(api, message, args);
+    });
+
+    commandHandler.registerCommand('/write', async (message, args) => {
+      trackCommand('/write', String(message.chat.id));
+      await writeCommand(api, message, args);
+    });
+
+    commandHandler.registerCommand('/changelog', async (message, _args) => {
+      trackCommand('/changelog', String(message.chat.id));
+      await api.sendMessage({ chat_id: message.chat.id, text: formatChangelogMessage() });
     });
 
     // ==========================================================================
@@ -614,18 +719,61 @@ class Plugin implements ITelegramBotPlugin {
     // Register agent callbacks
     registerAgentCallbacks(callbackHandler);
 
-    // Setup message handler
+    // Setup message handler - uses Claude Code CLI for all non-command messages
     const messageHandler = new SimpleMessageHandler(api, async (message) => {
       trackMessage(String(message.chat.id));
 
       if (message.text && !message.text.startsWith('/')) {
-        // Non-command messages go to Z.ai
-        if (this.bot.zaiServiceInstance) {
-          // Let the bot handle it (already in bot.ts)
-          return;
+        // Non-command messages go to Claude Code CLI
+        try {
+          // Show typing indicator
+          await api.sendChatAction({ chat_id: message.chat.id, action: 'typing' });
+
+          // Process with Claude Code
+          const response = await this.claudeCodeService.processMessage(
+            String(message.chat.id),
+            message.text
+          );
+
+          // Send response (split if too long for Telegram)
+          const maxLength = 4000;
+          let text = response.text;
+
+          while (text.length > 0) {
+            const chunk = text.substring(0, maxLength);
+            text = text.substring(maxLength);
+
+            await api.sendMessage({
+              chat_id: message.chat.id,
+              text: chunk,
+              parse_mode: 'Markdown',
+            });
+          }
+
+          // Show session info if it's a new session
+          if (response.isNewSession) {
+            await api.sendMessage({
+              chat_id: message.chat.id,
+              text: `_💡 Nieuwe sessie gestart. Gebruik /claude voor sessiebeheer._`,
+              parse_mode: 'Markdown',
+            });
+          }
+        } catch (error) {
+          const err = error as Error;
+          this.logger.error('Claude Code error', { error: err.message });
+
+          // User-friendly error message
+          let errorMsg = '❌ Er ging iets mis met Claude.';
+          if (err.message.includes('timeout') || err.message.includes('TIMEOUT')) {
+            errorMsg = '⏱️ Claude reageerde niet op tijd. Probeer het opnieuw.';
+          } else if (err.message.includes('already being processed') || err.message.includes('verwerkt')) {
+            errorMsg = '⏳ ' + err.message;
+          } else if (err.message.includes('spawn') || err.message.includes('ENOENT')) {
+            errorMsg = '❌ Claude CLI niet gevonden. Is `claude` geïnstalleerd?';
+          }
+
+          await api.sendMessage({ chat_id: message.chat.id, text: errorMsg });
         }
-        // Fallback echo if no Claude
-        await api.sendMessage({ chat_id: message.chat.id, text: `Echo: ${message.text}` });
       }
     });
 

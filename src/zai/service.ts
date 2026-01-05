@@ -15,6 +15,15 @@ const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant in Telegram.
 - Keep responses under 4000 characters
 - Be friendly and professional`;
 
+// Coding-focused system prompt for /code (developer mode)
+const DEV_SYSTEM_PROMPT = `You are a senior software engineer helping via Telegram.
+- Default to Dutch if the user writes Dutch, otherwise mirror the user language.
+- Keep answers compact and actionable. Prefer bullet lists.
+- When providing changes, output unified diffs or apply_patch blocks. If multiple files, separate code blocks per file.
+- Never invent files that don't exist; if context is missing, ask a short clarifying question first.
+- For shell steps, use bash fenced blocks. For code, use the correct language fences.
+- Maximum ~3500 characters per reply; if longer, summarize and offer to continue.`;
+
 export class ZAIService {
   private options: Required<ZAIServiceOptions>;
   private conversations: Map<string, ZAIConversation> = new Map();
@@ -34,6 +43,26 @@ export class ZAIService {
    * Process a message from a user and get AI response
    */
   async processMessage(chatId: string, userMessage: string): Promise<ZAIResponse> {
+    return this.processMessageInternal(chatId, userMessage, this.options.systemPrompt);
+  }
+
+  /**
+   * Process a developer-focused message (used by /code)
+   */
+  async processDevMessage(chatId: string, userMessage: string): Promise<ZAIResponse> {
+    // Use separate conversation namespace to avoid mixing with chat mode
+    const scopedChatId = `dev:${chatId}`;
+    return this.processMessageInternal(scopedChatId, userMessage, DEV_SYSTEM_PROMPT);
+  }
+
+  /**
+   * Shared message processor with custom system prompt
+   */
+  private async processMessageInternal(
+    chatId: string,
+    userMessage: string,
+    systemPrompt: string,
+  ): Promise<ZAIResponse> {
     // Get or create conversation
     const conversation = this.getConversation(chatId);
 
@@ -47,7 +76,7 @@ export class ZAIService {
     try {
       // Prepare messages for API (include system prompt)
       const apiMessages: ZAIMessage[] = [
-        { role: 'system', content: this.options.systemPrompt },
+        { role: 'system', content: systemPrompt },
         ...conversation.messages,
       ];
 

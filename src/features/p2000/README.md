@@ -3,8 +3,8 @@
 Real-time Dutch emergency services (112) notifications for the Utrecht region.
 
 ## 📋 Features
-
 - ✅ **Real-time notifications** - Scrapes P2000.nl RSS feed every 30 seconds
+## 
 - ✅ **Region filtering** - Filters for Utrecht province municipalities
 - ✅ **Service filtering** - Filter by Brandweer, Ambulance, Politie, Kustwacht, GHOR
 - ✅ **Priority detection** - Recognizes A1, A2, B1, B2, GRIP, and priority keywords
@@ -84,6 +84,26 @@ notifier.start(api);
 ```
 
 ## 🔧 Configuration
+
+### Feed source (belangrijk)
+
+Sommige P2000 bronnen (o.a. `p2000.nl`) kunnen in bepaalde omgevingen **HTML teruggeven i.p.v. RSS/XML** (of TLS/cert problemen geven). Daarom kun je de feedbron instellen via environment variables.
+
+```bash
+# Primary feed URL (default: https://feeds.feedburner.com/p2000)
+P2000_FEED_URL=https://feeds.feedburner.com/p2000
+
+# Optional fallback feed URL (default: https://www.p2000.nl/rss)
+P2000_FALLBACK_FEED_URL=https://www.p2000.nl/rss
+
+# Optional (NIET aangeraden): accepteer ongeldige TLS certificaten
+P2000_ALLOW_INSECURE_TLS=1
+
+# Optional: Utrecht-filter standaard aanzetten (alleen gebruiken als je feed Utrecht-locaties bevat)
+P2000_FILTER_UTRECHT_BY_DEFAULT=1
+```
+
+Als je `p2000.nl` gebruikt en je ziet HTML responses, laat de default Feedburner aan staan of kies een andere RSS provider.
 
 ### Scraper Configuration
 

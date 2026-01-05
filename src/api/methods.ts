@@ -256,6 +256,16 @@ export class ApiMethods {
     });
   }
 
+  /**
+   * Stuur chat action (typing indicator, etc.)
+   */
+  async sendChatAction(params: {
+    chat_id: number | string;
+    action: 'typing' | 'upload_photo' | 'record_video' | 'upload_video' | 'record_voice' | 'upload_voice' | 'upload_document' | 'find_location' | 'record_video_note' | 'upload_video_note';
+  }): Promise<boolean> {
+    return this.client.call<boolean>('sendChatAction', params as unknown as Record<string, unknown>);
+  }
+
   // ==========================================================================
   // Formatting Helpers
   // ==========================================================================

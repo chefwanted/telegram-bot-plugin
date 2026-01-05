@@ -18,6 +18,7 @@ import type {
 export class MemoryStorage implements Storage {
   private sessions: Map<string, Session> = new Map();
   private options: Required<MemoryStorageOptions>;
+  private cleanupTimer?: NodeJS.Timeout;
 
   constructor(options: MemoryStorageOptions = {}) {
     this.options = {
@@ -27,7 +28,10 @@ export class MemoryStorage implements Storage {
 
     // Start cleanup interval
     if (this.options.cleanupInterval > 0) {
-      setInterval(() => this.cleanup(), this.options.cleanupInterval);
+      this.cleanupTimer = setInterval(
+        () => this.cleanup(),
+        this.options.cleanupInterval
+      );
     }
   }
 
@@ -147,6 +151,10 @@ export class MemoryStorage implements Storage {
    * Clear alle sessies en stop cleanup
    */
   destroy(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = undefined;
+    }
     this.sessions.clear();
   }
 }

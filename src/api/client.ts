@@ -48,7 +48,7 @@ export class ApiClient {
     };
 
     this.axios = axios.create({
-      baseURL: config.timeout ? undefined : DEFAULT_BASE_URL,
+      baseURL: DEFAULT_BASE_URL,
       timeout: this.config.timeout,
     });
   }
