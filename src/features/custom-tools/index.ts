@@ -1,6 +1,7 @@
 /**
  * Custom Tools Feature
  * Allows users to add custom scripts and tools via the bot
+ * Supports OpenCode CLI (omo) and Claude CLI (claude)
  */
 
 import { spawn } from 'child_process';
@@ -11,6 +12,40 @@ import type { Message } from '../../types/telegram';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger({ prefix: 'CustomTools' });
+
+// =============================================================================
+// Special CLI Commands (allowed even if not found by 'which')
+// =============================================================================
+
+const SPECIAL_CLI_COMMANDS = ['omo', 'claude', 'npm', 'node', 'npx'];
+
+/**
+ * Check if a command is a special CLI that should be allowed
+ */
+function isSpecialCLI(command: string): boolean {
+  return SPECIAL_CLI_COMMANDS.includes(command.toLowerCase());
+}
+
+/**
+ * Check if command exists (handles special CLIs)
+ */
+async function commandExists(command: string): Promise<boolean> {
+  // Always allow special CLIs
+  if (isSpecialCLI(command)) {
+    return true;
+  }
+
+  // Use 'which' for regular commands
+  return new Promise((resolve) => {
+    const proc = spawn('which', [command]);
+    proc.on('close', (code) => {
+      resolve(code === 0);
+    });
+    proc.on('error', () => {
+      resolve(false);
+    });
+  });
+}
 
 // =============================================================================
 // Custom Tool Types
@@ -27,6 +62,7 @@ export interface CustomTool {
   enabled: boolean;
   createdAt: Date;
   createdBy: number; // user id
+  isCliTool?: boolean; // mark as CLI tool (omo, claude, etc.)
 }
 
 interface ToolResult {
@@ -96,8 +132,21 @@ export async function executeCustomTool(
   const startTime = Date.now();
 
   try {
-    const fullArgs = [...tool.args, ...args];
+    // Add special flags for CLI tools
+    let fullArgs = [...tool.args, ...args];
     const workingDir = tool.workingDir || process.cwd();
+
+    // Claude needs -p flag for non-interactive use
+    if (tool.isCliTool && tool.command.toLowerCase() === 'claude') {
+      // Add -p if not already present
+      if (!fullArgs.includes('-p') && !fullArgs.includes('--print')) {
+        fullArgs = ['-p', ...fullArgs];
+      }
+      // Add --output-format text for cleaner output
+      if (!fullArgs.includes('--output-format')) {
+        fullArgs.push('--output-format', 'text');
+      }
+    }
 
     logger.info('Executing custom tool', { tool: tool.name, args: fullArgs });
 
@@ -204,19 +253,15 @@ Let op: Kommas in argumenten moeten escaped worden met \\
   const command = args[1];
   const description = args.slice(2).join(' ');
 
-  // Validate command exists
-  try {
-    await new Promise((resolve, reject) => {
-      const testProc = spawn('which', [command]);
-      testProc.on('close', (code) => {
-        if (code === 0) resolve(true);
-        else reject(new Error('Command not found'));
-      });
-      testProc.on('error', reject);
-    });
-  } catch {
-    await api.sendText(chatId, `Error: Command '${command}' not found in PATH`);
-    return;
+  // Validate command exists (skip for special CLIs like omo, claude)
+  const isSpecial = isSpecialCLI(command);
+
+  if (!isSpecial) {
+    const exists = await commandExists(command);
+    if (!exists) {
+      await api.sendText(chatId, `Error: Command '${command}' not found in PATH`);
+      return;
+    }
   }
 
   const tools = loadTools();
@@ -228,15 +273,16 @@ Let op: Kommas in argumenten moeten escaped worden met \\
     description,
     command,
     args: [],
-    timeout: 30,
+    timeout: isSpecial ? 120 : 30, // Give CLIs more time
     enabled: true,
     createdAt: new Date(),
     createdBy: userId,
+    isCliTool: isSpecial,
   };
 
   saveTools(tools);
 
-  await api.sendText(chatId, `✅ Custom tool '${name}' toegevoegd!\n\nGebruik: /tool run ${toolId} [args]`);
+  await api.sendText(chatId, `✅ Custom tool '${name}' toegevoegd!` + (isSpecial ? '\n\n⏱️ Timeout: 120s (verhoogd voor CLI)' : '') + `\n\nGebruik: /tool run ${toolId} [args]`);
 }
 
 export async function toolListCommand(
@@ -372,11 +418,24 @@ Met custom tools kun je eigen scripts en commando's toevoegen.
 /tool add greet bash "echo Hello {NAME}" - Aangepaste greeting
 /tool run greet World
 
+*🤖 AI CLI Integratie:*
+
+/tool add claude claude "Vraag Claude AI" - Start Claude CLI
+/tool run claude "Explain this code" - Claude zal je vraag beantwoorden
+/tool add omo omo "OpenCode CLI" - Start OpenCode CLI
+/tool run omo "Write a function to calculate fibonacci" - OpenCode zal je helpen
+
+*💡 Tips voor AI CLI:*
+- Gebruik dubbele aanhalingstekens rond prompts met spaties
+- AI CLI's krijgen 120s timeout (langer dan normale tools)
+- Claude werkt het beste met korte, duidelijke prompts
+- OpenCode kan complexe code genereren
+
 *Variabelen:*
 {NAME} - Tool naam
 {ARGS} - Alle argumenten
 {ARG1}, {ARG2} - Eerste, tweede argument
-    `.trim();
+  `.trim();
 
   await api.sendText(chatId, help, { parse_mode: 'Markdown' });
 }
