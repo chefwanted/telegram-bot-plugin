@@ -101,16 +101,21 @@ export class StatusManager {
   }
 
   /**
-   * Generate status display text with animations and tokens
-   */
+    * Generate status display text with animations and tokens
+    */
   generateStatusDisplay(chatId: string): string {
     const state = this.state.get(chatId);
     if (!state) {
-      return '⏳ Initializing...';
+      return '🤖 Claude Code\n\nReady to help!';
     }
 
     const display = STATUS_DISPLAYS[state.status];
-    let text = `${display.emoji} ${display.text}`;
+    let text = display.emoji + ' *' + display.text + '*';
+
+    // Add subtext if available
+    if (display.subtext) {
+      text += '\n_' + display.subtext + '_';
+    }
 
     // Add animated dots for animated states
     if (display.animated) {
@@ -123,7 +128,7 @@ export class StatusManager {
       const elapsed = Date.now() - state.startTime.getTime();
       const seconds = Math.floor(elapsed / 1000);
       if (seconds >= 3) {
-        text += ` (${seconds}s)`;
+        text += ' (' + seconds + 's)';
       }
     }
 
@@ -131,25 +136,25 @@ export class StatusManager {
     if (state.status === StreamStatus.COMPLETE && state.totalTokens) {
       const tokens = state.totalTokens;
       const tokensK = (tokens / 1000).toFixed(1);
-      text += `\n\n📊 ${tokensK}k tokens`;
+      text += '\n\n📊 `' + tokensK + 'k` tokens';
       if (state.inputTokens && state.outputTokens) {
-        text += ` (${(state.inputTokens / 1000).toFixed(1)}k in + ${(state.outputTokens / 1000).toFixed(1)}k out)`;
+        text += ' (' + Math.round(state.inputTokens / 1000) + 'k in → ' + Math.round(state.outputTokens / 1000) + 'k out)';
       }
     }
 
     // Add current tool if any
     if (state.currentTool) {
-      text += `\n\n🔧 ${state.currentTool}`;
+      text += '\n\n🔧 `' + state.currentTool + '`';
     }
 
     // Add error message with suggestions if any
     if (state.errorMessage) {
-      text += `\n\n❌ ${state.errorMessage}`;
+      text += '\n\n❌ `' + state.errorMessage + '`';
       const suggestions = getErrorSuggestions(state.errorMessage);
       if (suggestions.length > 0) {
         text += '\n\n💡 *Possible solutions:*';
         for (const suggestion of suggestions) {
-          text += `\n${suggestion}`;
+          text += '\n' + suggestion;
         }
       }
     }

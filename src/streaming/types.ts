@@ -87,15 +87,16 @@ export interface StatusDisplay {
   text: string;
   showElapsed?: boolean;
   animated?: boolean;  // Whether to show animated dots
+  subtext?: string;    // Additional context
 }
 
 export const STATUS_DISPLAYS: Record<StreamStatus, StatusDisplay> = {
-  [StreamStatus.IDLE]: { emoji: '💤', text: 'Idle' },
-  [StreamStatus.THINKING]: { emoji: '⏳', text: 'Thinking', showElapsed: true, animated: true },
-  [StreamStatus.TOOL_USE]: { emoji: '🔧', text: 'Using tool' },
-  [StreamStatus.RESPONSE]: { emoji: '✍️', text: 'Generating', showElapsed: true, animated: true },
-  [StreamStatus.CONFIRMATION]: { emoji: '❓', text: 'Awaiting confirmation' },
-  [StreamStatus.COMPLETE]: { emoji: '✅', text: 'Complete' },
+  [StreamStatus.IDLE]: { emoji: '💤', text: 'Ready' },
+  [StreamStatus.THINKING]: { emoji: '🤔', text: 'Analyzing', showElapsed: true, animated: true, subtext: 'Thinking about your request...' },
+  [StreamStatus.TOOL_USE]: { emoji: '🔧', text: 'Working', subtext: 'Using tools to complete your request' },
+  [StreamStatus.RESPONSE]: { emoji: '✍️', text: 'Writing', showElapsed: true, animated: true, subtext: 'Generating response...' },
+  [StreamStatus.CONFIRMATION]: { emoji: '⚠️', text: 'Confirmation needed', subtext: 'A potentially dangerous operation requires your approval' },
+  [StreamStatus.COMPLETE]: { emoji: '✅', text: 'Done' },
   [StreamStatus.ERROR]: { emoji: '❌', text: 'Error' },
 };
 

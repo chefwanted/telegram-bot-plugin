@@ -44,10 +44,10 @@ describe('STATUS_DISPLAYS', () => {
 
   it('should have correct emojis', () => {
     expect(STATUS_DISPLAYS[StreamStatus.IDLE].emoji).toBe('💤');
-    expect(STATUS_DISPLAYS[StreamStatus.THINKING].emoji).toBe('⏳');
+    expect(STATUS_DISPLAYS[StreamStatus.THINKING].emoji).toBe('🤔');
     expect(STATUS_DISPLAYS[StreamStatus.TOOL_USE].emoji).toBe('🔧');
     expect(STATUS_DISPLAYS[StreamStatus.RESPONSE].emoji).toBe('✍️');
-    expect(STATUS_DISPLAYS[StreamStatus.CONFIRMATION].emoji).toBe('❓');
+    expect(STATUS_DISPLAYS[StreamStatus.CONFIRMATION].emoji).toBe('⚠️');
     expect(STATUS_DISPLAYS[StreamStatus.COMPLETE].emoji).toBe('✅');
     expect(STATUS_DISPLAYS[StreamStatus.ERROR].emoji).toBe('❌');
   });

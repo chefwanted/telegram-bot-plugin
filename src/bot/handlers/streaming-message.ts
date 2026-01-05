@@ -52,7 +52,11 @@ export class StreamingMessageHandler implements MessageHandler {
       // Send initial status
       await this.api.sendChatAction({ chat_id: chatId, action: 'typing' });
 
-      const initialStatus = this.statusManager.generateStatusDisplay(String(chatId));
+      // Get session info
+      const session = await this.claudeCode.getActiveSession(String(chatId));
+      const sessionInfo = session ? '\n\n📁 *Session:* `' + session.id.substring(0, 8) + '...`' : '';
+
+      const initialStatus = '🤖 *Claude Code*' + sessionInfo + '\n\n' + this.statusManager.generateStatusDisplay(String(chatId));
       const statusResult = await this.api.sendMessage({
         chat_id: chatId,
         text: initialStatus,
@@ -126,12 +130,14 @@ export class StreamingMessageHandler implements MessageHandler {
           const state = this.statusManager.getState(String(chatId));
           const currentTool = state?.currentTool || 'unknown';
 
-          // Format and display tool result
+          // Format and display tool result inline in status message
           const toolResultDisplay = this.toolVisibility.formatToolResult(result, currentTool);
+          const currentText = this.statusManager.generateStatusDisplay(String(chatId));
 
-          await this.api.sendMessage({
+          await this.api.editMessageText({
             chat_id: chatId,
-            text: toolResultDisplay,
+            message_id: statusMessageId,
+            text: currentText + '\n\n' + toolResultDisplay,
             parse_mode: 'Markdown',
           });
 
@@ -159,13 +165,15 @@ export class StreamingMessageHandler implements MessageHandler {
           this.statusManager.updateStatus(String(chatId), StreamStatus.ERROR, error.message);
           await this.updateStatusMessage(chatId, statusMessageId);
 
-          // Send error with suggestions
           const suggestions = getErrorSuggestions(error.message);
-          const errorMessage = `❌ *Error:*\n${error.message}\n\n${suggestions.map(s => s).join('\n')}`;
+          let errorText = '❌ *Error*\n\n' + error.message + '\n\n';
+          if (suggestions.length > 0) {
+            errorText += '💡 *Suggestions:*\n' + suggestions.map(s => '• ' + s).join('\n');
+          }
 
           await this.api.sendMessage({
             chat_id: chatId,
-            text: errorMessage,
+            text: errorText,
             parse_mode: 'Markdown',
           });
         },
@@ -173,15 +181,9 @@ export class StreamingMessageHandler implements MessageHandler {
         onComplete: async (result) => {
           logger.debug('Stream complete', { chatId, textLength: result.text.length });
 
-          // Send final response
-          if (result.text) {
-            await this.messageStreamer.sendComplete(chatId, result.text, {
-              maxLength: 4000,
-              parseMode: 'Markdown',
-            });
-          }
+          this.statusManager.updateStatus(String(chatId), StreamStatus.COMPLETE);
+          await this.updateStatusMessage(chatId, statusMessageId);
 
-          // Clean up
           this.statusManager.clearState(String(chatId));
         },
       });
