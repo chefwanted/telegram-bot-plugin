@@ -75,9 +75,6 @@ import { statsCommand, statsResetCommand } from './features/analytics';
 // Search
 import { searchCommand } from './features/search';
 
-// Games
-import { triviaCommand, triviaAnswerCommand, tttCommand, tttMoveCommand } from './features/games';
-
 // Files
 import {
   fileListCommand,
@@ -95,32 +92,6 @@ import {
   gitCommitCommand,
   gitLogCommand,
 } from './features/files';
-
-// Groups
-import {
-  groupCreateCommand,
-  groupListCommand,
-  groupJoinCommand,
-  groupLeaveCommand,
-  groupPostCommand,
-  groupReadCommand,
-  groupDiscoverCommand,
-} from './features/groups';
-
-// News
-import {
-  newsCommand,
-  newsSearchCommand,
-  newsSourcesCommand,
-} from './features/news';
-
-// P2000
-import {
-  p2000Command,
-  p2000SubscribeCommand,
-  p2000HelpCommand,
-} from './features/p2000';
-import { getP2000Notifier } from './features/p2000';
 
 // Skills
 import {
@@ -178,7 +149,6 @@ class Plugin implements ITelegramBotPlugin {
   private zaiService?: ZAIService;
   private claudeCodeService: ClaudeCodeService;
   private reminderService?: ReminderService;
-  private p2000Notifier = getP2000Notifier();
 
   constructor(config: PluginConfig) {
     this.config = config;
@@ -254,9 +224,6 @@ class Plugin implements ITelegramBotPlugin {
       this.reminderService.start();
     }
 
-    // Start P2000 notifier (push notifications)
-    this.p2000Notifier.start(this.bot.apiMethods);
-
     // Start bot
     await this.bot.start();
 
@@ -277,9 +244,6 @@ class Plugin implements ITelegramBotPlugin {
     if (this.reminderService) {
       this.reminderService.stop();
     }
-
-    // Stop P2000 notifier
-    this.p2000Notifier.stop();
 
     // Stop bot
     await this.bot.stop();
@@ -533,30 +497,6 @@ class Plugin implements ITelegramBotPlugin {
     });
 
     // ==========================================================================
-    // Games Commands
-    // ==========================================================================
-
-    commandHandler.registerCommand('/trivia', async (message, _args) => {
-      trackCommand('/trivia', String(message.chat.id));
-      await triviaCommand(api, message);
-    });
-
-    commandHandler.registerCommand('/trivia-answer', async (message, args) => {
-      trackCommand('/trivia-answer', String(message.chat.id));
-      await triviaAnswerCommand(api, message, args);
-    });
-
-    commandHandler.registerCommand('/ttt', async (message, _args) => {
-      trackCommand('/ttt', String(message.chat.id));
-      await tttCommand(api, message);
-    });
-
-    commandHandler.registerCommand('/ttt-move', async (message, args) => {
-      trackCommand('/ttt-move', String(message.chat.id));
-      await tttMoveCommand(api, message, args);
-    });
-
-    // ==========================================================================
     // Files Commands
     // ==========================================================================
 
@@ -619,68 +559,6 @@ class Plugin implements ITelegramBotPlugin {
           text: '📦 Git versiebeheer:\n/git init - Start repository\n/git status - Toon status\n/git add [bestanden] - Voeg toe aan staging\n/git commit <bericht> - Maak commit\n/git log [aantal] - Toon geschiedenis',
         });
       }
-    });
-
-    // ==========================================================================
-    // Groups Commands
-    // ==========================================================================
-
-    commandHandler.registerCommand('/group', async (message, args) => {
-      trackCommand('/group', String(message.chat.id));
-      const action = args[0];
-      if (action === 'create') {
-        await groupCreateCommand(api, message, args.slice(1));
-      } else if (action === 'list') {
-        await groupListCommand(api, message);
-      } else if (action === 'join') {
-        await groupJoinCommand(api, message, args.slice(1));
-      } else if (action === 'leave') {
-        await groupLeaveCommand(api, message, args.slice(1));
-      } else if (action === 'post') {
-        await groupPostCommand(api, message, args.slice(1));
-      } else if (action === 'read') {
-        await groupReadCommand(api, message, args.slice(1));
-      } else if (action === 'discover') {
-        await groupDiscoverCommand(api, message);
-      } else {
-        await api.sendMessage({
-          chat_id: message.chat.id,
-          text: '👥 Groepen:\n/group create <naam> - Maak groep\n/group list - Jouw groepen\n/group join <id> - Join groep\n/group leave <id> - Verlaat groep\n/group post <id>|<tekst>|[anon] - Plaats bericht\n/group read <id> [aantal] - Lees berichten\n/group discover - Ontdek groepen',
-        });
-      }
-    });
-
-    // ==========================================================================
-    // News Commands
-    // ==========================================================================
-
-    commandHandler.registerCommand('/news', async (message, args) => {
-      trackCommand('/news', String(message.chat.id));
-      await newsCommand(api, message, args);
-    });
-
-    commandHandler.registerCommand('/news-search', async (message, args) => {
-      trackCommand('/news-search', String(message.chat.id));
-      await newsSearchCommand(api, message, args);
-    });
-
-    commandHandler.registerCommand('/news-sources', async (message, _args) => {
-      trackCommand('/news-sources', String(message.chat.id));
-      await newsSourcesCommand(api, message);
-    });
-
-    // ==========================================================================
-    // P2000 Commands
-    // ==========================================================================
-
-    commandHandler.registerCommand('/p2000', async (message, args) => {
-      trackCommand('/p2000', String(message.chat.id));
-      await p2000Command(api, message, args);
-    });
-
-    commandHandler.registerCommand('/p2000-subscribe', async (message, args) => {
-      trackCommand('/p2000-subscribe', String(message.chat.id));
-      await p2000SubscribeCommand(api, message, args);
     });
 
     // ==========================================================================

@@ -399,60 +399,46 @@ export class TelegramBot {
 
   /**
    * Setup bot commands (for / menu in Telegram)
-   */
+    */
   private async setupCommands(): Promise<void> {
     try {
       await this.api.setupCommands([
-        // Main Commands
+        // Core
         { command: 'start', description: '🚀 Start de bot' },
-        { command: 'help', description: '❓ Help overzicht' },
-        { command: 'version', description: '📦 Versie & build info' },
-        { command: 'update', description: '🆕 Laatste wijzigingen' },
-        { command: 'changelog', description: '📜 Changelog' },
-        // Claude Code CLI
-        { command: 'claude', description: '🤖 Claude Code sessie beheer' },
-        { command: 'claude_status', description: '📊 Claude sessie status' },
-        { command: 'claude_clear', description: '🗑️ Beëindig sessie' },
-        // Developer Mode
-        { command: 'dev', description: '🛠️ Developer mode help' },
-        { command: 'project', description: '📂 Project openen/beheren' },
+        { command: 'help', description: '❓ Help & commands' },
+        { command: 'status', description: '⚙️ Bot status' },
+        { command: 'version', description: '📦 Versie info' },
+
+        // Claude Code AI
+        { command: 'claude', description: '🤖 Claude Code Chat' },
+        { command: 'claude_status', description: '📊 Session status' },
+        { command: 'claude_clear', description: '🗑️ Nieuwe sessie' },
+
+        // Developer Tools
+        { command: 'dev', description: '🛠️ Developer help' },
+        { command: 'project', description: '📂 Project info' },
         { command: 'files', description: '📄 Bestanden bekijken' },
         { command: 'tree', description: '🌳 Directory structuur' },
         { command: 'read', description: '👁️ Bestand lezen' },
-        { command: 'focus', description: '📎 Focus bestanden (AI context)' },
-        { command: 'code', description: '💻 Code met Z.ai' },
-        { command: 'patch', description: '📝 Patches beheren' },
+        { command: 'focus', description: '📎 AI context focus' },
+        { command: 'code', description: '💻 Code aanpassen' },
+        { command: 'patch', description: '📝 Patch toepassen' },
         { command: 'write', description: '✏️ Bestand schrijven' },
-        // Notes
-        { command: 'note', description: '📝 Notities beheren' },
-        // Reminders
+        { command: 'git', description: '📦 Git status & commits' },
+
+        // Productivity
+        { command: 'note', description: '📝 Notities' },
         { command: 'remind', description: '⏰ Herinneringen' },
-        // Translation
         { command: 'tr', description: '🌐 Vertaal tekst' },
-        // Links
-        { command: 'link', description: '🔗 Link shortener' },
-        // Analytics
-        { command: 'stats', description: '📊 Bot statistieken' },
-        // Search
         { command: 'search', description: '🔍 Zoeken' },
-        // Games
-        { command: 'trivia', description: '🎮 Trivia spel' },
-        { command: 'ttt', description: '🎮 Tic Tac Toe' },
-        // Files & Folders
-        { command: 'file', description: '📎 Bestanden beheren' },
+
+        // Other
+        { command: 'link', description: '🔗 Link shortener' },
+        { command: 'stats', description: '📊 Bot statistieken' },
+        { command: 'file', description: '📎 Bestanden upload' },
         { command: 'folder', description: '📁 Folders' },
-        { command: 'git', description: '📦 Git versiebeheer' },
-        // Groups
-        { command: 'group', description: '👥 Groepen' },
-        // News
-        { command: 'news', description: '📰 Nieuws' },
-        // P2000
-        { command: 'p2000', description: '🚨 112 Meldingen Utrecht' },
-        // Skills
-        { command: 'skills', description: '🎯 Jouw skills' },
+        { command: 'skills', description: '🎯 Skills XP' },
         { command: 'leaderboard', description: '🏆 Leaderboard' },
-        // System
-        { command: 'status', description: '⚙️ Bot status' },
       ], 'all_private_chats');
       this.logger.info('Bot commands registered');
     } catch (error) {
