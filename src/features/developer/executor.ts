@@ -3,7 +3,7 @@
  * Executes code tasks using AI and manages patches
  */
 
-import type { ZAIService } from '../../zai';
+import type { LLMRouter } from '../../llm';
 import { createPatch, getProjectContext, readFile } from './context';
 import { createLogger } from '../../utils/logger';
 
@@ -44,14 +44,14 @@ export async function executeCodeTask(
   chatId: string,
   instruction: string,
   contextInfo: string,
-  zaiService: ZAIService
+  llmRouter: LLMRouter
 ): Promise<string> {
   // Build the prompt
   const prompt = buildPrompt(instruction, contextInfo);
 
   try {
     // Call AI service with dev mode
-    const response = await zaiService.processDevMessage(chatId, prompt);
+    const response = await llmRouter.processDeveloperMessage(chatId, prompt);
 
     // Parse response for patches
     const patches = parsePatches(response.text);
@@ -79,8 +79,9 @@ export async function executeCodeTask(
     }
 
     return response.text;
-  } catch (error: any) {
-    logger.error('Code task execution failed', { error, chatId });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Code task execution failed', { error: errorMessage, chatId });
     throw error;
   }
 }

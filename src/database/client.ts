@@ -7,16 +7,50 @@ import Database from 'better-sqlite3';
 import * as path from 'path';
 import * as fs from 'fs';
 import { createLogger } from '../utils/logger';
+import { assertSqliteIdentifier, quoteSqliteIdentifier } from './sqlite';
 
 const logger = createLogger({ prefix: 'Database' });
 
 // Database path
-const DB_DIR = process.env.DATABASE_PATH ? path.dirname(process.env.DATABASE_PATH) : '/tmp/telegram-bot';
-const DB_PATH = process.env.DATABASE_PATH || path.join(DB_DIR, 'bot.db');
+const DEFAULT_DB_DIR = '/tmp/telegram-bot';
+const DB_LOCK_DIR = process.env.DATABASE_DIR?.trim();
+const DEFAULT_DB_PATH = path.join(DB_LOCK_DIR || DEFAULT_DB_DIR, 'bot.db');
 
-// Ensure directory exists
-if (!fs.existsSync(DB_DIR)) {
-  fs.mkdirSync(DB_DIR, { recursive: true });
+function isWithinDir(candidatePath: string, baseDir: string): boolean {
+  const base = path.resolve(baseDir);
+  const resolved = path.resolve(candidatePath);
+  const baseWithSep = base.endsWith(path.sep) ? base : `${base}${path.sep}`;
+  return resolved.startsWith(baseWithSep);
+}
+
+function resolveDatabasePathFromEnv(): string {
+  const requested = process.env.DATABASE_PATH?.trim();
+  if (!requested) {
+    return DEFAULT_DB_PATH;
+  }
+
+  const resolved = path.resolve(requested);
+  const allowUnsafe = process.env.ALLOW_UNSAFE_DATABASE_PATH === 'true';
+  if (DB_LOCK_DIR && !allowUnsafe && !isWithinDir(resolved, DB_LOCK_DIR)) {
+    throw new Error(
+      `DATABASE_PATH must be within ${path.resolve(DB_LOCK_DIR)} (set ALLOW_UNSAFE_DATABASE_PATH=true to override)`
+    );
+  }
+
+  return resolved;
+}
+
+const DB_PATH = resolveDatabasePathFromEnv();
+
+function validateDatabasePath(candidate: string): string {
+  const resolved = path.resolve(candidate);
+  const allowUnsafe = process.env.ALLOW_UNSAFE_DATABASE_PATH === 'true';
+  if (DB_LOCK_DIR && !allowUnsafe && !isWithinDir(resolved, DB_LOCK_DIR)) {
+    throw new Error(
+      `Database path must be within ${path.resolve(DB_LOCK_DIR)} (set ALLOW_UNSAFE_DATABASE_PATH=true to override)`
+    );
+  }
+  return resolved;
 }
 
 // =============================================================================
@@ -63,6 +97,7 @@ export interface FileRecord {
   file_size: number | null;
   mime_type: string | null;
   folder: string | null;
+  file_path: string | null;
   created_at: number;
 }
 
@@ -90,7 +125,13 @@ export class DatabaseClient {
   private database: Database.Database;
 
   constructor(dbPath?: string) {
-    const pathToUse = dbPath || DB_PATH;
+    const pathToUse = dbPath ? validateDatabasePath(dbPath) : DB_PATH;
+    const dbDir = path.dirname(pathToUse);
+
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true, mode: 0o700 });
+    }
+
     this.database = new Database(pathToUse);
     this.database.pragma('journal_mode = WAL');
     this.database.pragma('foreign_keys = ON');
@@ -168,12 +209,14 @@ export class DatabaseClient {
         file_size INTEGER,
         mime_type TEXT,
         folder TEXT,
+        file_path TEXT,
         created_at INTEGER NOT NULL
       )
     `);
 
     this.database.exec(`CREATE INDEX IF NOT EXISTS idx_files_chat ON files(chat_id)`);
     this.database.exec(`CREATE INDEX IF NOT EXISTS idx_files_folder ON files(folder)`);
+    this.ensureColumn('files', 'file_path', 'TEXT');
 
     // Skills table
     this.database.exec(`
@@ -201,6 +244,20 @@ export class DatabaseClient {
     `);
 
     logger.info('Database schema initialized');
+  }
+
+  private ensureColumn(table: string, column: string, definition: string): void {
+    const safeTableIdent = quoteSqliteIdentifier(table, 'table');
+    const safeColumnIdent = quoteSqliteIdentifier(column, 'column');
+
+    const columns = this.database.prepare(`PRAGMA table_info(${safeTableIdent})`).all() as { name: string }[];
+    const exists = columns.some((col) => col.name === column);
+    if (!exists) {
+      // Identifiers are validated; `definition` is provided by code (not user input).
+      assertSqliteIdentifier(table, 'table');
+      assertSqliteIdentifier(column, 'column');
+      this.database.exec(`ALTER TABLE ${safeTableIdent} ADD COLUMN ${safeColumnIdent} ${definition}`);
+    }
   }
 
   // ==========================================================================
@@ -355,9 +412,27 @@ export class DatabaseClient {
   addFile(chatId: string, fileId: string, fileName: string, fileSize: number, mimeType: string, folder?: string): number {
     const now = Date.now();
     const result = this.database.prepare(`
-      INSERT INTO files (chat_id, file_id, file_name, file_size, mime_type, folder, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(chatId, fileId, fileName, fileSize, mimeType, folder || null, now);
+      INSERT INTO files (chat_id, file_id, file_name, file_size, mime_type, folder, file_path, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(chatId, fileId, fileName, fileSize, mimeType, folder || null, null, now);
+
+    return result.lastInsertRowid as number;
+  }
+
+  addFileWithPath(
+    chatId: string,
+    fileId: string,
+    fileName: string,
+    fileSize: number,
+    mimeType: string,
+    folder: string | undefined,
+    filePath: string | null
+  ): number {
+    const now = Date.now();
+    const result = this.database.prepare(`
+      INSERT INTO files (chat_id, file_id, file_name, file_size, mime_type, folder, file_path, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(chatId, fileId, fileName, fileSize, mimeType, folder || null, filePath, now);
 
     return result.lastInsertRowid as number;
   }
@@ -377,6 +452,19 @@ export class DatabaseClient {
     const result = this.database.prepare(`
       DELETE FROM files WHERE id = ? AND chat_id = ?
     `).run(id, chatId);
+    return result.changes > 0;
+  }
+
+  getFileByFileId(chatId: string, fileId: string): FileRecord | undefined {
+    return this.database.prepare(`
+      SELECT * FROM files WHERE chat_id = ? AND file_id = ? LIMIT 1
+    `).get(chatId, fileId) as FileRecord | undefined;
+  }
+
+  deleteFileByFileId(chatId: string, fileId: string): boolean {
+    const result = this.database.prepare(`
+      DELETE FROM files WHERE chat_id = ? AND file_id = ?
+    `).run(chatId, fileId);
     return result.changes > 0;
   }
 

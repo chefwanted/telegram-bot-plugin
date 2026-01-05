@@ -27,6 +27,7 @@ export class ReminderService {
     this.interval = setInterval(() => {
       this.checkReminders();
     }, 30000);
+    this.interval.unref();
   }
 
   stop(): void {

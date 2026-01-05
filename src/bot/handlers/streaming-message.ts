@@ -1,18 +1,18 @@
 /**
  * Streaming Message Handler
- * Handler voor streaming berichten met Claude Code integratie
+ * Handler voor streaming berichten met multi-LLM integratie
  */
 
 import type { Message } from '../../types/telegram';
 import type { ApiMethods } from '../../api';
 import { createLogger } from '../../utils/logger';
-import type { ClaudeCodeService } from '../../claude-code/service';
-import { StreamStatus, type ToolUseEvent, type ToolResultEvent, getErrorSuggestions } from '../../streaming/types';
+import { StreamStatus, type ToolUseEvent, type ToolResultEvent, getErrorSuggestions, splitIntoChunks } from '../../streaming/types';
 import { MessageStreamer } from '../../streaming/message-stream';
 import { getStatusManager } from '../../streaming/status';
 import { getToolVisibilityManager } from '../../streaming/tool-visibility';
 import { getConfirmationManager } from '../../streaming/confirmation';
 import type { MessageHandler } from './message';
+import type { LLMRouter } from '../../llm';
 
 const logger = createLogger({ prefix: 'StreamingHandler' });
 
@@ -28,7 +28,7 @@ export class StreamingMessageHandler implements MessageHandler {
 
   constructor(
     private api: ApiMethods,
-    private claudeCode: ClaudeCodeService
+    private llmRouter: LLMRouter
   ) {
     this.messageStreamer = new MessageStreamer(api);
     this.confirmationManager = getConfirmationManager(api);
@@ -46,17 +46,16 @@ export class StreamingMessageHandler implements MessageHandler {
     logger.debug('Handling streaming message', { chatId, textLength: text.length });
 
     try {
+      const provider = this.llmRouter.getProvider(String(chatId));
+      const providerLabel = this.llmRouter.getProviderLabel(provider);
+
       // Create stream state
-      this.statusManager.createState(String(chatId));
+      this.statusManager.createState(String(chatId), providerLabel);
 
       // Send initial status
       await this.api.sendChatAction({ chat_id: chatId, action: 'typing' });
 
-      // Get session info
-      const session = await this.claudeCode.getActiveSession(String(chatId));
-      const sessionInfo = session ? '\n\n📁 *Session:* `' + session.id.substring(0, 8) + '...`' : '';
-
-      const initialStatus = '🤖 *Claude Code*' + sessionInfo + '\n\n' + this.statusManager.generateStatusDisplay(String(chatId));
+      const initialStatus = this.statusManager.generateStatusDisplay(String(chatId));
       const statusResult = await this.api.sendMessage({
         chat_id: chatId,
         text: initialStatus,
@@ -69,7 +68,7 @@ export class StreamingMessageHandler implements MessageHandler {
       // Process message with streaming callbacks
       let accumulatedContent = '';
 
-      await this.claudeCode.processMessageStream(String(chatId), text, {
+      await this.llmRouter.processMessageStream(String(chatId), text, {
         onStatusChange: async (status: StreamStatus) => {
           this.statusManager.updateStatus(String(chatId), status);
           await this.updateStatusMessage(chatId, statusMessageId);
@@ -155,7 +154,7 @@ export class StreamingMessageHandler implements MessageHandler {
             {
               maxLength: 3800,
               parseMode: 'Markdown',
-              throttleMs: 500,
+              throttleMs: 400,
             }
           );
         },
@@ -184,6 +183,7 @@ export class StreamingMessageHandler implements MessageHandler {
           this.statusManager.updateStatus(String(chatId), StreamStatus.COMPLETE);
           await this.updateStatusMessage(chatId, statusMessageId);
 
+          await this.finalizeResponse(chatId, statusMessageId, accumulatedContent);
           this.statusManager.clearState(String(chatId));
         },
       });
@@ -233,6 +233,41 @@ export class StreamingMessageHandler implements MessageHandler {
     }
   }
 
+  private async finalizeResponse(
+    chatId: number,
+    statusMessageId: number,
+    content: string
+  ): Promise<void> {
+    const text = content || this.statusManager.generateStatusDisplay(String(chatId));
+    const chunks = splitIntoChunks(text, 3800);
+
+    if (chunks.length <= 1) {
+      await this.api.editMessageText({
+        chat_id: chatId,
+        message_id: statusMessageId,
+        text: text,
+        parse_mode: 'Markdown',
+      });
+      return;
+    }
+
+    const firstChunk = chunks[0].content + '\n\n_...continuing..._';
+    await this.api.editMessageText({
+      chat_id: chatId,
+      message_id: statusMessageId,
+      text: firstChunk,
+      parse_mode: 'Markdown',
+    });
+
+    for (let i = 1; i < chunks.length; i++) {
+      await this.api.sendMessage({
+        chat_id: chatId,
+        text: chunks[i].content,
+        parse_mode: 'Markdown',
+      });
+    }
+  }
+
   /**
    * Cleanup resources
    */
@@ -247,7 +282,7 @@ export class StreamingMessageHandler implements MessageHandler {
 
 export function createStreamingMessageHandler(
   api: ApiMethods,
-  claudeCode: ClaudeCodeService
+  llmRouter: LLMRouter
 ): StreamingMessageHandler {
-  return new StreamingMessageHandler(api, claudeCode);
+  return new StreamingMessageHandler(api, llmRouter);
 }

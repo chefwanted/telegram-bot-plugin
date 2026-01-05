@@ -21,12 +21,13 @@ export class StatusManager {
   /**
    * Create initial stream state for a chat
    */
-  createState(chatId: string): StreamState {
+  createState(chatId: string, providerLabel?: string): StreamState {
     const state: StreamState = {
       status: 'idle' as StreamStatus,
       toolHistory: [],
       startTime: new Date(),
       lastUpdate: new Date(),
+      providerLabel,
     };
 
     this.state.set(chatId, state);
@@ -106,11 +107,12 @@ export class StatusManager {
   generateStatusDisplay(chatId: string): string {
     const state = this.state.get(chatId);
     if (!state) {
-      return '🤖 Claude Code\n\nReady to help!';
+      return '🤖 *AI*\n\nReady to help!';
     }
 
     const display = STATUS_DISPLAYS[state.status];
-    let text = display.emoji + ' *' + display.text + '*';
+    const header = state.providerLabel ? `🤖 *${state.providerLabel}*` : '🤖 *AI*';
+    let text = header + '\n\n' + display.emoji + ' *' + display.text + '*';
 
     // Add subtext if available
     if (display.subtext) {

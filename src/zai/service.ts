@@ -42,17 +42,25 @@ export class ZAIService {
   /**
    * Process a message from a user and get AI response
    */
-  async processMessage(chatId: string, userMessage: string): Promise<ZAIResponse> {
-    return this.processMessageInternal(chatId, userMessage, this.options.systemPrompt);
+  async processMessage(
+    chatId: string,
+    userMessage: string,
+    options?: { model?: string }
+  ): Promise<ZAIResponse> {
+    return this.processMessageInternal(chatId, userMessage, this.options.systemPrompt, options?.model);
   }
 
   /**
    * Process a developer-focused message (used by /code)
    */
-  async processDevMessage(chatId: string, userMessage: string): Promise<ZAIResponse> {
+  async processDevMessage(
+    chatId: string,
+    userMessage: string,
+    options?: { model?: string }
+  ): Promise<ZAIResponse> {
     // Use separate conversation namespace to avoid mixing with chat mode
     const scopedChatId = `dev:${chatId}`;
-    return this.processMessageInternal(scopedChatId, userMessage, DEV_SYSTEM_PROMPT);
+    return this.processMessageInternal(scopedChatId, userMessage, DEV_SYSTEM_PROMPT, options?.model);
   }
 
   /**
@@ -62,6 +70,7 @@ export class ZAIService {
     chatId: string,
     userMessage: string,
     systemPrompt: string,
+    modelOverride?: string,
   ): Promise<ZAIResponse> {
     // Get or create conversation
     const conversation = this.getConversation(chatId);
@@ -81,7 +90,7 @@ export class ZAIService {
       ];
 
       // Call Z.ai API
-      const response = await this.callChatAPI(apiMessages);
+      const response = await this.callChatAPI(apiMessages, modelOverride);
 
       // Extract response text
       const text = response.choices[0]?.message?.content || '';
@@ -110,9 +119,12 @@ export class ZAIService {
   /**
    * Call Z.ai chat completion API
    */
-  private async callChatAPI(messages: ZAIMessage[]): Promise<ZAIChatResponse> {
+  private async callChatAPI(
+    messages: ZAIMessage[],
+    modelOverride?: string
+  ): Promise<ZAIChatResponse> {
     const requestBody: ZAIChatRequest = {
-      model: this.options.model,
+      model: modelOverride || this.options.model,
       messages,
       max_tokens: this.options.maxTokens,
       temperature: this.options.temperature,
@@ -163,6 +175,10 @@ export class ZAIService {
       req.write(JSON.stringify(requestBody));
       req.end();
     });
+  }
+
+  getModel(): string {
+    return this.options.model;
   }
 
   /**

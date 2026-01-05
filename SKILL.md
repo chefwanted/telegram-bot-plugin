@@ -1,6 +1,6 @@
 ---
 name: telegram-bot-plugin
-description: Comprehensive development toolkit for the Telegram Bot Plugin (telegram-bot-plugin). A feature-rich Telegram bot with multi-LLM support (Claude CLI, Z.ai GLM-4.7, MiniMax v2.1), streaming responses, and 39+ commands. Use this skill when: (1) Adding new features or commands to the bot, (2) Fixing bugs in existing services (Claude Code, Z.ai, MiniMax), (3) Integrating new LLM providers or fallback mechanisms, (4) Updating bot configuration or environment variables, (5) Debugging timeout, authentication, or API issues, (6) Modifying streaming message handlers or command routing. The bot uses TypeScript with a modular architecture where features are self-contained modules in src/features/.
+description: Comprehensive development toolkit for the Telegram Bot Plugin (telegram-bot-plugin). A feature-rich Telegram bot with multi-LLM support (Claude CLI optional, Z.ai GLM-4.7, MiniMax v2.1, Mistral), streaming responses, and 39+ commands. Use this skill when: (1) Adding new features or commands to the bot, (2) Fixing bugs in existing services (Claude Code, Z.ai, MiniMax, Mistral), (3) Integrating new LLM providers or fallback mechanisms, (4) Updating bot configuration or environment variables, (5) Debugging timeout, authentication, or API issues, (6) Modifying streaming message handlers or command routing. The bot uses TypeScript with a modular architecture where features are self-contained modules in src/features/.
 ---
 
 # Telegram Bot Plugin Development
@@ -31,6 +31,14 @@ Required `.env` variables:
 TELEGRAM_BOT_TOKEN=123:abc
 ZAI_API_KEY=sk-...           # Fallback LLM
 MINIMAX_API_KEY=eyJ...        # Additional fallback
+MISTRAL_API_KEY=sk-...        # Additional provider
+LLM_DEFAULT_PROVIDER=zai      # Optional default provider
+MISTRAL_MODEL=mistral-small-latest
+ZAI_MODEL=glm-4.7
+MINIMAX_MODEL=MiniMax-v2.1
+MISTRAL_DEV_MODEL=codestral-latest
+ZAI_DEV_MODEL=
+MINIMAX_DEV_MODEL=
 CLAUDE_TIMEOUT=300000        # 5 min (default)
 ```
 
@@ -67,10 +75,10 @@ src/
 
 ### Multi-LLM Fallback Chain
 
-1. **Claude CLI** (primary) - Interactive AI via CLI
-2. **Z.ai GLM-4.7** - First fallback
-3. **MiniMax v2.1** - Secondary fallback
-4. **MiniMax-Lite** - Auto-fallback on errors
+1. **Z.ai GLM-4.7** - Default API provider
+2. **MiniMax v2.1** - Secondary fallback
+3. **Mistral** - Additional fallback
+4. **Claude CLI** (optional) - Enable per chat with `/llm set claude-cli`
 
 ### Command Registration Flow
 

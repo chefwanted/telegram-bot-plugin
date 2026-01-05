@@ -19,13 +19,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions automation for better code review process
 - Code owners configuration
 - PR labeler for automatic labeling
+- File download support for uploaded documents/photos
+- Configurable FILES_DIR and DATABASE_PATH paths
 
 ### Changed
 - Enhanced git integration with full workflow support
 - Improved CI pipeline with better caching and parallel jobs
+- Git commands now use safe argument execution
+- File storage uses per-chat directories and stores file paths
 
 ### Fixed
 - Git pipeline implementation completed
+- File deletion now works by file_id and removes stored files
 
 ## [2.2.0] - 2026-01-05
 

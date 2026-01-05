@@ -4,3 +4,4 @@
 
 export * from './client';
 export { getDatabase, closeDatabase } from './client';
+export * from './sqlite';

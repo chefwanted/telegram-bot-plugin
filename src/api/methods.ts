@@ -4,6 +4,7 @@
  */
 
 import type { Api } from 'grammy';
+import axios from 'axios';
 import type {
   InlineKeyboardMarkup,
   ReplyKeyboardMarkup,
@@ -18,6 +19,7 @@ import type {
   EditMessageTextResponse,
   AnswerCallbackQueryResponse,
   AnswerInlineQueryResponse,
+  GetFileResponse,
   GetMeResponse,
   GetChatResponse,
   SetMyCommandsRequest,
@@ -32,7 +34,13 @@ import type {
 export class ApiMethods {
   private callCount = 0;
 
-  constructor(private api: Api) {}
+  constructor(
+    private api: Api,
+    private config: {
+      token?: string;
+      apiRoot?: string;
+    } = {}
+  ) {}
 
   private async withCount<T>(fn: () => Promise<T>): Promise<T> {
     this.callCount += 1;
@@ -57,7 +65,9 @@ export class ApiMethods {
   async sendMessage(
     request: SendMessageRequest
   ): Promise<SendMessageResponse> {
-    return this.withCount(() => this.api.raw.sendMessage(request as any));
+    return this.withCount(() =>
+      this.api.raw.sendMessage(request as unknown as Parameters<Api['raw']['sendMessage']>[0])
+    );
   }
 
   /**
@@ -66,7 +76,9 @@ export class ApiMethods {
   async editMessageText(
     request: EditMessageTextRequest
   ): Promise<EditMessageTextResponse> {
-    return this.withCount(() => this.api.raw.editMessageText(request as any));
+    return this.withCount(() =>
+      this.api.raw.editMessageText(request as unknown as Parameters<Api['raw']['editMessageText']>[0])
+    );
   }
 
   /**
@@ -92,7 +104,11 @@ export class ApiMethods {
   async answerCallbackQuery(
     request: AnswerCallbackQueryRequest
   ): Promise<AnswerCallbackQueryResponse> {
-    return this.withCount(() => this.api.raw.answerCallbackQuery(request as any));
+    return this.withCount(() =>
+      this.api.raw.answerCallbackQuery(
+        request as unknown as Parameters<Api['raw']['answerCallbackQuery']>[0]
+      )
+    );
   }
 
   /**
@@ -101,7 +117,9 @@ export class ApiMethods {
   async answerInlineQuery(
     request: AnswerInlineQueryRequest
   ): Promise<AnswerInlineQueryResponse> {
-    return this.withCount(() => this.api.raw.answerInlineQuery(request as any));
+    return this.withCount(() =>
+      this.api.raw.answerInlineQuery(request as unknown as Parameters<Api['raw']['answerInlineQuery']>[0])
+    );
   }
 
   // ==========================================================================
@@ -116,12 +134,37 @@ export class ApiMethods {
   }
 
   /**
+   * Haal bestand info op
+   */
+  async getFile(fileId: string): Promise<GetFileResponse> {
+    return this.withCount(() =>
+      this.api.raw.getFile({ file_id: fileId } as unknown as Parameters<Api['raw']['getFile']>[0])
+    );
+  }
+
+  /**
    * Haal chat informatie op
    */
   async getChat(chatId: number | string): Promise<GetChatResponse> {
     return this.withCount(() => this.api.raw.getChat({
       chat_id: chatId,
     }));
+  }
+
+  /**
+   * Download een bestand via file_path
+   */
+  async downloadFile(filePath: string): Promise<Buffer> {
+    const token = this.config.token;
+    if (!token) {
+      throw new Error('Bot token is vereist om bestanden te downloaden.');
+    }
+    const apiRoot = this.config.apiRoot || 'https://api.telegram.org';
+    const url = `${apiRoot}/file/bot${token}/${filePath}`;
+    return this.withCount(async () => {
+      const response = await axios.get<ArrayBuffer>(url, { responseType: 'arraybuffer' });
+      return Buffer.from(response.data);
+    });
   }
 
   /**
@@ -138,7 +181,9 @@ export class ApiMethods {
    * Stel bot commando's in (voor / menu in Telegram)
    */
   async setMyCommands(request: SetMyCommandsRequest): Promise<SetMyCommandsResponse> {
-    return this.withCount(() => this.api.raw.setMyCommands(request as any));
+    return this.withCount(() =>
+      this.api.raw.setMyCommands(request as unknown as Parameters<Api['raw']['setMyCommands']>[0])
+    );
   }
 
   /**
@@ -270,7 +315,11 @@ export class ApiMethods {
     chat_id: number | string;
     action: 'typing' | 'upload_photo' | 'record_video' | 'upload_video' | 'record_voice' | 'upload_voice' | 'upload_document' | 'find_location' | 'record_video_note' | 'upload_video_note';
   }): Promise<boolean> {
-    return this.withCount(() => this.api.raw.sendChatAction(params as any));
+    return this.withCount(() =>
+      this.api.raw.sendChatAction(
+        params as unknown as Parameters<Api['raw']['sendChatAction']>[0]
+      )
+    );
   }
 
   /**
@@ -456,6 +505,6 @@ export class ApiMethods {
 // Export Factory
 // =============================================================================
 
-export function createApiMethods(api: Api): ApiMethods {
-  return new ApiMethods(api);
+export function createApiMethods(api: Api, config?: { token?: string; apiRoot?: string }): ApiMethods {
+  return new ApiMethods(api, config);
 }

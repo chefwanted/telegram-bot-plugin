@@ -37,13 +37,17 @@ export async function searchAll(query: string, chatId: string, claudeService?: C
   const notesFile = `${SEARCH_INDEX_DIR}/notes_${chatId}.json`;
   if (fs.existsSync(notesFile)) {
     try {
-      const notes = JSON.parse(fs.readFileSync(notesFile, 'utf-8'));
-      notes.forEach((note: any) => {
-        if (note.content?.toLowerCase().includes(lowerQuery)) {
+      const parsed: unknown = JSON.parse(fs.readFileSync(notesFile, 'utf-8'));
+      const notes = Array.isArray(parsed) ? (parsed as unknown[]) : [];
+      notes.forEach((note) => {
+        const record = note as { content?: unknown; createdAt?: unknown };
+        const content = typeof record.content === 'string' ? record.content : '';
+        const createdAt = typeof record.createdAt === 'number' ? record.createdAt : Date.now();
+        if (content.toLowerCase().includes(lowerQuery)) {
           results.push({
             type: 'note',
-            content: note.content,
-            timestamp: note.createdAt || Date.now(),
+            content,
+            timestamp: createdAt,
             source: 'notes',
           });
         }

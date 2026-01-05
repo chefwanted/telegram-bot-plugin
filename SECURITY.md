@@ -71,11 +71,11 @@ If you discover a security vulnerability, please report it by:
 
 ### v2.2.0 (January 2026)
 
-- Fixed critical vulnerability in form-data dependency
-- Migrated Telegram API layer to grammY to remove legacy request-based dependencies
-- Removed console.log statements leaking sensitive data
-- Replaced 'any' types with proper TypeScript types
-- Added proper error handling and logging
+- Hardened SQLite identifier handling (table/column name validation)
+- Added optional database path lockdown via `DATABASE_DIR`
+- Added per chat+user rate limiting (commands/messages/uploads)
+- Added basic input validation and upload size limits
+- Added log redaction for common secret patterns (incl. Telegram bot tokens)
 
 ## Security Checklist
 
@@ -84,9 +84,9 @@ If you discover a security vulnerability, please report it by:
 - [x] Proper error handling without exposing internals
 - [x] Updated dependencies with security patches
 - [x] TypeScript strict mode enabled
-- [x] Removed 'any' types for better type safety
+- [x] Removed 'any' types in `src/` for better type safety
 - [x] Proper logging without sensitive data exposure
-- [ ] Rate limiting implementation (TODO)
+- [x] Rate limiting implementation
 - [ ] Webhook signature verification (TODO)
 - [ ] User authentication/authorization (TODO)
 - [ ] File upload virus scanning (TODO)

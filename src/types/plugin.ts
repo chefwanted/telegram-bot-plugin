@@ -16,6 +16,8 @@ export interface PluginConfig {
   zaiApiKey?: string;
   /** MiniMax API key for MiniMax v2.1 integration */
   miniMaxApiKey?: string;
+  /** Mistral API key for Mistral integration */
+  mistralApiKey?: string;
   /** Plugin opties */
   options?: PluginOptions;
 }

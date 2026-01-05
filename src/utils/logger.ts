@@ -3,6 +3,8 @@
  * Simpele logger met verschillende levels
  */
 
+import { redactSensitive } from './redact';
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
 
 export interface LoggerOptions {
@@ -73,6 +75,7 @@ export class Logger {
 
     const timestamp = new Date().toISOString();
     const prefix = this.prefix ? `[${this.prefix}]` : '';
+    const safeMeta = meta ? (redactSensitive(meta) as Record<string, unknown>) : undefined;
 
     if (this.format === 'json') {
       console.log(
@@ -81,11 +84,11 @@ export class Logger {
           level,
           prefix: this.prefix,
           message,
-          ...meta,
+          ...(safeMeta || {}),
         })
       );
     } else {
-      const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
+      const metaStr = safeMeta ? ` ${JSON.stringify(safeMeta)}` : '';
       console.log(`${timestamp} ${prefix} [${level.toUpperCase()}] ${message}${metaStr}`);
     }
   }

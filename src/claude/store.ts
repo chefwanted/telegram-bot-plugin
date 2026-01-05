@@ -61,7 +61,7 @@ export class ConversationStore {
 
       return conversation;
     } catch (error) {
-      console.error(`Failed to load conversation for ${chatId}:`, error);
+      logger.error(`Failed to load conversation for ${chatId}`, { error });
       return null;
     }
   }

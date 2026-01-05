@@ -19,7 +19,9 @@ import { statusCommand } from './bot/commands/status';
 import { telegramLogger, LogLevel } from './utils/telegram-logger';
 import { ZAIService } from './zai';
 import { MiniMaxService } from './minimax';
+import { MistralService } from './mistral';
 import { closeDatabase } from './database';
+import { LLMRouter, type LLMProvider } from './llm';
 
 // Claude Code CLI integration
 import {
@@ -99,12 +101,16 @@ import {
 
 // Custom Tools
 import { customToolCommand } from './features/custom-tools';
+import { llmCommand } from './features/llm';
 
 // CLI Commands
 import { claudeCliCommand, omoCommand } from './bot/commands/cli';
 
 // Logs Command
 import { logsCommand } from './bot/commands/logs';
+
+// Admin Command
+import { adminCommand } from './bot/commands/admin';
 
 // Version & update info
 import { formatVersionMessage, formatUpdateMessage, formatChangelogMessage } from './utils/version';
@@ -154,8 +160,10 @@ class Plugin implements ITelegramBotPlugin {
   private config: PluginConfig;
   private zaiService?: ZAIService;
   private miniMaxService?: MiniMaxService;
+  private mistralService?: MistralService;
   private claudeCodeService: ClaudeCodeService;
   private reminderService?: ReminderService;
+  private llmRouter: LLMRouter;
 
   constructor(config: PluginConfig) {
     this.config = config;
@@ -179,26 +187,52 @@ class Plugin implements ITelegramBotPlugin {
     if (config.zaiApiKey) {
       this.zaiService = new ZAIService({
         apiKey: config.zaiApiKey,
-        model: config.options?.claude?.model || 'glm-4.7',
+        model: process.env.ZAI_MODEL || 'glm-4.7',
         maxTokens: config.options?.claude?.maxTokens,
         temperature: config.options?.claude?.temperature,
       });
       this.logger.info('Z.ai service initialized');
-
-      // Set for search feature
-      setSearchClaudeService(this.zaiService as any); // Type compatibility
     }
 
     // Create MiniMax service as additional fallback if API key is available
     if (config.miniMaxApiKey) {
       this.miniMaxService = new MiniMaxService({
         apiKey: config.miniMaxApiKey,
-        model: 'MiniMax-v2.1',
+        model: process.env.MINIMAX_MODEL || 'MiniMax-v2.1',
         maxTokens: config.options?.claude?.maxTokens,
         temperature: config.options?.claude?.temperature,
       });
       this.logger.info('MiniMax service initialized (v2.1 + Lite fallback)');
     }
+
+    // Create Mistral service as additional provider if API key is available
+    if (config.mistralApiKey) {
+      this.mistralService = new MistralService({
+        apiKey: config.mistralApiKey,
+        model: process.env.MISTRAL_MODEL || 'mistral-small-latest',
+        maxTokens: config.options?.claude?.maxTokens,
+        temperature: config.options?.claude?.temperature,
+      });
+      this.logger.info('Mistral service initialized');
+    }
+
+    const defaultProvider = this.resolveDefaultProvider();
+    this.llmRouter = new LLMRouter(
+      {
+        claude: this.claudeCodeService,
+        zai: this.zaiService,
+        minimax: this.miniMaxService,
+        mistral: this.mistralService,
+      },
+      {
+        defaultProvider,
+        devModels: {
+          zai: process.env.ZAI_DEV_MODEL,
+          minimax: process.env.MINIMAX_DEV_MODEL,
+          mistral: process.env.MISTRAL_DEV_MODEL || 'codestral-latest',
+        },
+      }
+    );
 
     // Create bot
     this.bot = createBot({
@@ -274,6 +308,16 @@ class Plugin implements ITelegramBotPlugin {
       this.zaiService.destroy();
     }
 
+    // Destroy MiniMax service
+    if (this.miniMaxService) {
+      this.miniMaxService.destroy();
+    }
+
+    // Destroy Mistral service
+    if (this.mistralService) {
+      this.mistralService.destroy();
+    }
+
     // Clear event handlers
     this.eventDispatcher.clear();
 
@@ -331,12 +375,28 @@ class Plugin implements ITelegramBotPlugin {
 
     commandHandler.registerCommand('/claude_status', async (message, _args) => {
       trackCommand('/claude-status', String(message.chat.id));
+      if (!this.llmRouter.isProviderActive(String(message.chat.id), 'claude-cli')) {
+        await api.sendMessage({
+          chat_id: message.chat.id,
+          text: '⚠️ Claude CLI staat uit. Activeer met `/llm set claude-cli`.',
+          parse_mode: 'Markdown',
+        });
+        return;
+      }
       // Use Claude Code service status
       await routeClaudeCommand(api, message, ['status'], this.claudeCodeService);
     });
 
     commandHandler.registerCommand('/claude_clear', async (message, _args) => {
       trackCommand('/claude-clear', String(message.chat.id));
+      if (!this.llmRouter.isProviderActive(String(message.chat.id), 'claude-cli')) {
+        await api.sendMessage({
+          chat_id: message.chat.id,
+          text: '⚠️ Claude CLI staat uit. Activeer met `/llm set claude-cli`.',
+          parse_mode: 'Markdown',
+        });
+        return;
+      }
       // End current Claude Code session (creates new one on next message)
       await routeClaudeCommand(api, message, ['end'], this.claudeCodeService);
     });
@@ -344,12 +404,25 @@ class Plugin implements ITelegramBotPlugin {
     // /claude command - full session management
     commandHandler.registerCommand('/claude', async (message, args) => {
       trackCommand('/claude', String(message.chat.id));
+      if (!this.llmRouter.isProviderActive(String(message.chat.id), 'claude-cli')) {
+        await api.sendMessage({
+          chat_id: message.chat.id,
+          text: '⚠️ Claude CLI staat uit. Activeer met `/llm set claude-cli`.',
+          parse_mode: 'Markdown',
+        });
+        return;
+      }
       await routeClaudeCommand(api, message, args, this.claudeCodeService);
     });
 
     commandHandler.registerCommand('/code', async (message, args) => {
       trackCommand('/code', String(message.chat.id));
-      await codeCommand(api, message, args, this.bot.zaiServiceInstance);
+      await codeCommand(api, message, args, this.llmRouter);
+    });
+
+    commandHandler.registerCommand('/llm', async (message, args) => {
+      trackCommand('/llm', String(message.chat.id));
+      await llmCommand(api, message, args, this.llmRouter);
     });
 
     // ==========================================================================
@@ -641,6 +714,15 @@ class Plugin implements ITelegramBotPlugin {
     });
 
     // ==========================================================================
+    // Admin Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/admin', async (message, args) => {
+      trackCommand('/admin', String(message.chat.id));
+      await adminCommand(api, message, args);
+    });
+
+    // ==========================================================================
     // System Commands
     // ==========================================================================
 
@@ -667,12 +749,58 @@ class Plugin implements ITelegramBotPlugin {
     });
 
     // Setup message handler - use StreamingMessageHandler for interactive responses
-    const messageHandler = createStreamingMessageHandler(api, this.claudeCodeService);
+    const messageHandler = createStreamingMessageHandler(api, this.llmRouter);
 
     // Set handlers on bot
     this.bot.setCommandHandler(commandHandler);
     this.bot.setCallbackHandler(callbackHandler);
     this.bot.setMessageHandler(messageHandler);
+  }
+
+  private resolveDefaultProvider(): LLMProvider {
+    const fromEnv = process.env.LLM_DEFAULT_PROVIDER;
+    const envProvider = fromEnv ? this.normalizeProviderName(fromEnv) : undefined;
+
+    if (envProvider && this.isProviderConfigured(envProvider)) {
+      return envProvider;
+    }
+
+    if (this.zaiService) return 'zai';
+    if (this.miniMaxService) return 'minimax';
+    if (this.mistralService) return 'mistral';
+    return 'claude-cli';
+  }
+
+  private normalizeProviderName(value: string): LLMProvider | undefined {
+    const key = value.trim().toLowerCase();
+    const aliases: Record<string, LLMProvider> = {
+      'zai': 'zai',
+      'glm': 'zai',
+      'glm-4.7': 'zai',
+      'minimax': 'minimax',
+      'minimax-v2.1': 'minimax',
+      'mistral': 'mistral',
+      'mixtral': 'mistral',
+      'claude': 'claude-cli',
+      'claude-cli': 'claude-cli',
+      'cli': 'claude-cli',
+    };
+    return aliases[key];
+  }
+
+  private isProviderConfigured(provider: LLMProvider): boolean {
+    switch (provider) {
+      case 'zai':
+        return !!this.zaiService;
+      case 'minimax':
+        return !!this.miniMaxService;
+      case 'mistral':
+        return !!this.mistralService;
+      case 'claude-cli':
+        return true;
+      default:
+        return false;
+    }
   }
 }
 

@@ -5,7 +5,7 @@
 
 import type { Message } from '../../types/telegram';
 import type { ApiMethods } from '../../api';
-import type { ZAIService } from '../../zai';
+import type { LLMRouter } from '../../llm';
 import {
   getDevSession,
   clearDevSession,
@@ -646,15 +646,15 @@ export async function codeCommand(
   api: ApiMethods,
   message: Message,
   args: string[],
-  zaiService?: ZAIService
+  llmRouter?: LLMRouter
 ): Promise<void> {
   const chatId = message.chat.id;
   const instruction = args.join(' ').trim();
 
-  if (!zaiService) {
+  if (!llmRouter) {
     await api.sendMessage({
       chat_id: chatId,
-      text: '⚠️ AI service niet beschikbaar. Configureer ZAI_API_KEY.',
+      text: '⚠️ AI service niet beschikbaar. Configureer een LLM provider.',
     });
     return;
   }
@@ -697,7 +697,7 @@ Tips:
       String(chatId),
       instruction,
       contextInfo,
-      zaiService
+      llmRouter
     );
 
     // Send result (may be long, split if needed)
@@ -709,11 +709,12 @@ Tips:
         parse_mode: 'Markdown',
       });
     }
-  } catch (error: any) {
-    logger.error('Code command error', { error, chatId });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Code command error', { error: errorMessage, chatId });
     await api.sendMessage({
       chat_id: chatId,
-      text: `❌ Fout: ${error?.message || 'onbekende fout'}`,
+      text: `❌ Fout: ${errorMessage || 'onbekende fout'}`,
     });
   }
 }

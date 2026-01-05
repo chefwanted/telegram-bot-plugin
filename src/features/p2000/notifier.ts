@@ -79,6 +79,7 @@ export class P2000Notifier {
     // Start polling
     this.poll();
     this.pollTimer = setInterval(() => this.poll(), this.config.pollInterval);
+    this.pollTimer.unref();
   }
 
   /**

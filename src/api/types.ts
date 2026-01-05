@@ -16,6 +16,12 @@ export type EditMessageTextResponse = Message | true;
 export type AnswerCallbackQueryResponse = boolean;
 
 export type AnswerInlineQueryResponse = boolean;
+export type GetFileResponse = {
+  file_id: string;
+  file_unique_id: string;
+  file_size?: number;
+  file_path?: string;
+};
 
 // =============================================================================
 // Inline Query Types
@@ -97,6 +103,10 @@ export interface AnswerCallbackQueryRequest {
   show_alert?: boolean;
   url?: string;
   cache_time?: number;
+}
+
+export interface GetFileRequest {
+  file_id: string;
 }
 
 // =============================================================================

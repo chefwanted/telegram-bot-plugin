@@ -61,7 +61,7 @@ export class BaseMessageHandler implements MessageHandler {
     session: import('../../types/session').Session
   ): Promise<void> {
     // Override in subclass
-    this.logger.debug('Text message', { text: message.text });
+    this.logger.debug('Text message', { textLength: message.text?.length || 0 });
   }
 
   /**

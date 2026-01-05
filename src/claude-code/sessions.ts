@@ -127,6 +127,7 @@ export class FileSessionStorage implements SessionStorage {
         this.saveNow();
       }
     }, 1000);
+    this.saveTimer.unref();
   }
 
   private saveNow(): void {

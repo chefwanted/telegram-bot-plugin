@@ -16,9 +16,9 @@ const CHANGELOG = `
 *Versie ${BOT_VERSION} (Januari 2025)*
 
 *Nieuw:*
-• 🤖 Claude Code streaming - realtime AI antwoorden
+• 🤖 Multi-LLM chat met provider switch (/llm)
+• 🧠 Mistral provider toegevoegd
 • 🔧 Tool confirmation - bevestiging voor gevaarlijke operaties
-• 💰 Token usage tracking - zie je verbruik
 • 💡 Error suggestions - slimme foutoplossingen
 
 *Verbeterd:*
@@ -33,15 +33,18 @@ const CHANGELOG = `
 // =============================================================================
 
 const FEATURES = `
-*💬 Claude Code Chat*
+*💬 AI Chat*
 Stel vragen, vraag om hulp met code, of gebruik als assistent.
 Typ gewoon je bericht - geen commando nodig!
+
+*🤖 LLM Providers*
+• /llm - kies provider (Z.ai, MiniMax, Mistral, Claude CLI)
 
 *🛠️ Developer Tools*
 • /project - Bekijk project structuur
 • /read <bestand> - Lees bestand
 • /write <bestand> <inhoud> - Schrijf bestand
-• /code <opdracht> - Laat Claude code schrijven
+• /code <opdracht> - Laat AI code schrijven
 • /git - Git status en commits
 • /patch - Pas patches toe
 
@@ -61,14 +64,14 @@ Verdien XP door tools te gebruiken. Bekijk je skills met /skills en het leaderbo
 const SETUP = `
 *🚀 Quick Start*
 
-1. Typ een bericht om met Claude Code te chatten
+1. Typ een bericht om met de AI te chatten
 2. Gebruik /help voor alle commando's
-3. Gebruik /claude voor session beheer
+3. Gebruik /llm om je provider te kiezen
 
 *⚠️ Let op*
 - Sommige operaties vragen om bevestiging
 - Sessies worden bewaard tussen berichten
-- Gebruik /claude_clear voor nieuwe sessie
+- Gebruik /claude_clear voor nieuwe Claude CLI sessie
 `;
 
 // =============================================================================
@@ -83,7 +86,7 @@ export async function startCommand(
   const userName = message.from?.first_name || 'gebruiker';
 
   const welcomeMessage = `
-🤖 *Claude Code Bot* v${BOT_VERSION}
+🤖 *AI Bot* v${BOT_VERSION}
 
 👋 *Welkom, ${userName}!*
 

@@ -13,6 +13,7 @@ import type {
 } from '../types/session';
 import { getDatabase } from '../database';
 import { createLogger } from '../utils/logger';
+import { quoteSqliteIdentifier } from '../database/sqlite';
 
 const logger = createLogger({ prefix: 'SessionStorage' });
 
@@ -23,10 +24,12 @@ const logger = createLogger({ prefix: 'SessionStorage' });
 export class DatabaseStorage implements Storage {
   private db = getDatabase();
   private tableName: string;
+  private tableIdent: string;
   private defaultTtl: number; // in seconds
 
   constructor(options: DatabaseStorageOptions = {}) {
     this.tableName = options.tableName || 'sessions';
+    this.tableIdent = quoteSqliteIdentifier(this.tableName, 'table');
     this.defaultTtl = options.ttl || 86400; // 24 hours default
   }
 
@@ -35,7 +38,7 @@ export class DatabaseStorage implements Storage {
    */
   async initialize(): Promise<void> {
     this.db.db.exec(`
-      CREATE TABLE IF NOT EXISTS ${this.tableName} (
+      CREATE TABLE IF NOT EXISTS ${this.tableIdent} (
         id TEXT PRIMARY KEY,
         user_id INTEGER NOT NULL,
         chat_id INTEGER NOT NULL,
@@ -46,9 +49,9 @@ export class DatabaseStorage implements Storage {
       )
     `);
 
-    this.db.db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_user ON ${this.tableName}(user_id)`);
-    this.db.db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_chat ON ${this.tableName}(chat_id)`);
-    this.db.db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_expires ON ${this.tableName}(expires_at)`);
+    this.db.db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_user ON ${this.tableIdent}(user_id)`);
+    this.db.db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_chat ON ${this.tableIdent}(chat_id)`);
+    this.db.db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_expires ON ${this.tableIdent}(expires_at)`);
   }
 
   /**
@@ -56,7 +59,7 @@ export class DatabaseStorage implements Storage {
    */
   async get(id: string): Promise<Session | null> {
     const record = this.db.db.prepare(`
-      SELECT * FROM ${this.tableName} WHERE id = ?
+      SELECT * FROM ${this.tableIdent} WHERE id = ?
     `).get(id) as SessionRecord | undefined;
 
     if (!record) {
@@ -79,7 +82,7 @@ export class DatabaseStorage implements Storage {
     const record = this.sessionToRecord(session);
 
     this.db.db.prepare(`
-      INSERT OR REPLACE INTO ${this.tableName} (id, user_id, chat_id, data, created_at, updated_at, expires_at)
+      INSERT OR REPLACE INTO ${this.tableIdent} (id, user_id, chat_id, data, created_at, updated_at, expires_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       record.id,
@@ -97,7 +100,7 @@ export class DatabaseStorage implements Storage {
    */
   async delete(id: string): Promise<boolean> {
     const result = this.db.db.prepare(`
-      DELETE FROM ${this.tableName} WHERE id = ?
+      DELETE FROM ${this.tableIdent} WHERE id = ?
     `).run(id);
 
     return result.changes > 0;
@@ -108,7 +111,7 @@ export class DatabaseStorage implements Storage {
    */
   async has(id: string): Promise<boolean> {
     const record = this.db.db.prepare(`
-      SELECT 1 FROM ${this.tableName} WHERE id = ? AND (expires_at IS NULL OR expires_at > ?)
+      SELECT 1 FROM ${this.tableIdent} WHERE id = ? AND (expires_at IS NULL OR expires_at > ?)
     `).get(id, Date.now());
 
     return !!record;
@@ -119,7 +122,7 @@ export class DatabaseStorage implements Storage {
    */
   async getAll(): Promise<Session[]> {
     const records = this.db.db.prepare(`
-      SELECT * FROM ${this.tableName}
+      SELECT * FROM ${this.tableIdent}
       WHERE expires_at IS NULL OR expires_at > ?
       ORDER BY updated_at DESC
     `).all(Date.now()) as SessionRecord[];
@@ -131,7 +134,7 @@ export class DatabaseStorage implements Storage {
    * Verwijder alle sessies
    */
   async clear(): Promise<void> {
-    this.db.db.prepare(`DELETE FROM ${this.tableName}`).run();
+    this.db.db.prepare(`DELETE FROM ${this.tableIdent}`).run();
   }
 
   /**
@@ -139,7 +142,7 @@ export class DatabaseStorage implements Storage {
    */
   async getByUserId(userId: number): Promise<Session[]> {
     const records = this.db.db.prepare(`
-      SELECT * FROM ${this.tableName}
+      SELECT * FROM ${this.tableIdent}
       WHERE user_id = ? AND (expires_at IS NULL OR expires_at > ?)
       ORDER BY updated_at DESC
     `).all(userId, Date.now()) as SessionRecord[];
@@ -152,7 +155,7 @@ export class DatabaseStorage implements Storage {
    */
   async getByChatId(chatId: number): Promise<Session[]> {
     const records = this.db.db.prepare(`
-      SELECT * FROM ${this.tableName}
+      SELECT * FROM ${this.tableIdent}
       WHERE chat_id = ? AND (expires_at IS NULL OR expires_at > ?)
       ORDER BY updated_at DESC
     `).all(chatId, Date.now()) as SessionRecord[];
@@ -165,7 +168,7 @@ export class DatabaseStorage implements Storage {
    */
   async cleanup(): Promise<number> {
     const result = this.db.db.prepare(`
-      DELETE FROM ${this.tableName}
+      DELETE FROM ${this.tableIdent}
       WHERE expires_at IS NOT NULL AND expires_at < ?
     `).run(Date.now());
 
@@ -177,7 +180,7 @@ export class DatabaseStorage implements Storage {
    */
   async size(): Promise<number> {
     const result = this.db.db.prepare(`
-      SELECT COUNT(*) as count FROM ${this.tableName}
+      SELECT COUNT(*) as count FROM ${this.tableIdent}
       WHERE expires_at IS NULL OR expires_at > ?
     `).get(Date.now()) as { count: number };
 

@@ -4,7 +4,10 @@
 
 import type { Message } from '../../types/telegram';
 import type { ApiMethods } from '../../api';
+import * as path from 'path';
+import { createLogger } from '../../utils/logger';
 import {
+  saveFile,
   getUserFiles,
   deleteFile,
   formatFileSize,
@@ -12,6 +15,9 @@ import {
   getFolders,
   moveFile,
 } from './files';
+import { getMaxUploadBytes } from '../../utils/input-validation';
+
+const logger = createLogger({ prefix: 'FilesCmd' });
 import {
   gitInit,
   gitStatus,
@@ -86,21 +92,73 @@ export async function fileDeleteCommand(api: ApiMethods, message: Message, args:
 export async function handleFileUpload(
   api: ApiMethods,
   message: Message,
-  fileService: { saveFile: (file: unknown) => Promise<void> }
+  fileService: { saveFile: typeof saveFile } = { saveFile }
 ): Promise<void> {
-  const document = (message as Message & { document?: unknown }).document;
-  const photo = (message as Message & { photo?: unknown }).photo;
+  const document = (message as Message & { document?: { file_id: string; file_name?: string; mime_type?: string; file_size?: number } }).document;
+  const photo = (message as Message & { photo?: { file_id: string; file_size?: number }[] }).photo;
 
   if (!document && !photo) {
     return;
   }
 
-  // Note: This would require downloading the file from Telegram
-  // For now, just acknowledge
-  await api.sendMessage({
-    chat_id: message.chat.id,
-    text: '📎 Bestand ontvangen!\n\n(Notitie: Bestandsopslag integratie vereist extra configuratie)',
-  });
+  const chatId = message.chat.id;
+  const isPhoto = !document && Array.isArray(photo) && photo.length > 0;
+  const fileId = document?.file_id || (isPhoto ? photo![photo!.length - 1].file_id : undefined);
+  const fileSize = document?.file_size || (isPhoto ? photo![photo!.length - 1].file_size : undefined);
+
+  if (!fileId) {
+    await api.sendMessage({
+      chat_id: chatId,
+      text: '❌ Kon bestand niet verwerken (geen file_id gevonden).',
+    });
+    return;
+  }
+
+  const fileName = document?.file_name
+    ? path.basename(document.file_name)
+    : `photo_${message.message_id}.jpg`;
+  const mimeType = document?.mime_type || (isPhoto ? 'image/jpeg' : 'application/octet-stream');
+
+  const maxBytes = getMaxUploadBytes();
+  if (typeof fileSize === 'number' && fileSize > maxBytes) {
+    await api.sendMessage({
+      chat_id: chatId,
+      text: `❌ Bestand te groot (${formatFileSize(fileSize)}). Max: ${formatFileSize(maxBytes)}.`,
+    });
+    return;
+  }
+
+  try {
+    await api.sendChatAction({
+      chat_id: chatId,
+      action: isPhoto ? 'upload_photo' : 'upload_document',
+    });
+
+    const fileInfo = await api.getFile(fileId);
+    if (!fileInfo.file_path) {
+      await api.sendMessage({
+        chat_id: chatId,
+        text: '❌ Kon bestand niet downloaden (geen file_path beschikbaar).',
+      });
+      return;
+    }
+
+    const data = await api.downloadFile(fileInfo.file_path);
+    const saved = fileService.saveFile(String(chatId), fileName, data, mimeType);
+
+    await api.sendMessage({
+      chat_id: chatId,
+      text: `📎 Bestand opgeslagen: *${saved.fileName}*\nGrootte: ${formatFileSize(saved.fileSize)}\nID: \`${saved.id}\``,
+      parse_mode: 'Markdown',
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('File upload failed', { error: errorMessage });
+    await api.sendMessage({
+      chat_id: chatId,
+      text: `❌ Bestand upload mislukt: ${errorMessage}`,
+    });
+  }
 }
 
 // =============================================================================

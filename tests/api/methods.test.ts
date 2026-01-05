@@ -2,26 +2,31 @@
  * API Methods Tests
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { ApiMethods, createApiMethods } from '../../src/api/methods';
 import type { Api } from 'grammy';
+import axios from 'axios';
+
+jest.mock('axios');
 
 describe('ApiMethods', () => {
   let api: ApiMethods;
   let mockApi: { raw: Record<string, jest.Mock> };
 
   beforeEach(() => {
+    const resolvedMock = <T>(value: T) => jest.fn<() => Promise<T>>().mockResolvedValue(value);
     mockApi = {
       raw: {
-        sendMessage: jest.fn().mockResolvedValue({}),
-        editMessageText: jest.fn().mockResolvedValue({}),
-        deleteMessage: jest.fn().mockResolvedValue(true),
-        answerCallbackQuery: jest.fn().mockResolvedValue(true),
-        answerInlineQuery: jest.fn().mockResolvedValue(true),
-        getMe: jest.fn().mockResolvedValue({}),
-        getChat: jest.fn().mockResolvedValue({}),
-        setMyCommands: jest.fn().mockResolvedValue({ ok: true, result: true }),
-        sendChatAction: jest.fn().mockResolvedValue(true),
+        sendMessage: resolvedMock({}),
+        editMessageText: resolvedMock({}),
+        deleteMessage: resolvedMock(true),
+        answerCallbackQuery: resolvedMock(true),
+        answerInlineQuery: resolvedMock(true),
+        getFile: resolvedMock({}),
+        getMe: resolvedMock({}),
+        getChat: resolvedMock({}),
+        setMyCommands: resolvedMock({ ok: true, result: true }),
+        sendChatAction: resolvedMock(true),
       },
     };
     api = new ApiMethods(mockApi as unknown as Api);
@@ -88,6 +93,16 @@ describe('ApiMethods', () => {
     });
   });
 
+  describe('getFile', () => {
+    it('should call getFile with file_id', async () => {
+      await api.getFile('file123');
+
+      expect(mockApi.raw.getFile).toHaveBeenCalledWith({
+        file_id: 'file123',
+      });
+    });
+  });
+
   describe('getChat', () => {
     it('should get chat with correct id', async () => {
       await api.getChat(12345);
@@ -103,6 +118,32 @@ describe('ApiMethods', () => {
       expect(mockApi.raw.getChat).toHaveBeenCalledWith({
         chat_id: '@username',
       });
+    });
+  });
+
+  describe('downloadFile', () => {
+    it('should download file with token', async () => {
+      const mockedAxios = axios as jest.Mocked<typeof axios>;
+      mockedAxios.get.mockResolvedValue({ data: new Uint8Array([1, 2, 3]) });
+
+      const apiWithToken = new ApiMethods(mockApi as unknown as Api, {
+        token: 'TEST_TOKEN',
+        apiRoot: 'https://api.telegram.org',
+      });
+
+      const data = await apiWithToken.downloadFile('files/test.txt');
+
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        'https://api.telegram.org/file/botTEST_TOKEN/files/test.txt',
+        { responseType: 'arraybuffer' }
+      );
+      expect(Buffer.isBuffer(data)).toBe(true);
+    });
+
+    it('should throw when token is missing', async () => {
+      await expect(api.downloadFile('files/test.txt')).rejects.toThrow(
+        'Bot token is vereist om bestanden te downloaden.'
+      );
     });
   });
 

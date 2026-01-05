@@ -1,12 +1,15 @@
 {
   "name": "telegram-bot-plugin",
   "version": "2.2.0",
+  "packageManager": "bun@1.3.5",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "migrate": "ts-node scripts/migrate-to-db.ts",
     "test": "jest",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "test:live": "bun run scripts/live-validate.ts",
+    "validate:full": "bun run build && bun run test && bun run test:coverage && bun run test:live"
   },
   "keywords": [],
   "author": "",

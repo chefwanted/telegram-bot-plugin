@@ -50,6 +50,7 @@ export interface StreamState {
   startTime: Date;
   lastUpdate: Date;
   errorMessage?: string;
+  providerLabel?: string;
   // Token tracking (if available from Claude Code)
   inputTokens?: number;
   outputTokens?: number;
@@ -119,8 +120,8 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
   {
     errorPattern: /not authenticated|authentication|auth.*error|login/i,
     suggestions: [
-      '🔐 Run `claude` in terminal to authenticate',
-      '🔑 Check your Anthropic API key configuration',
+      '🔐 Run `claude` in terminal to authenticate (als Claude CLI)',
+      '🔑 Check je API keys voor Z.ai/MiniMax/Mistral',
       '📝 Visit https://console.anthropic.com to get an API key',
     ],
   },

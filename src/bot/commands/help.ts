@@ -17,10 +17,12 @@ const COMMANDS = `
 /status - Bot status en statistieken
 /version - Versie informatie
 
-*Claude Code AI*
-/claude - Start Claude Code chat sessie
-/claude_status - Toon huidige sessie info
-/claude_clear - Start nieuwe sessie
+*AI Providers*
+/llm - Kies LLM provider (zai/minimax/mistral/claude-cli)
+/llm model set [provider] <model> - Model wisselen
+/claude - Claude CLI sessiebeheer (alleen als actief)
+/claude_status - Toon Claude CLI sessie info
+/claude_clear - Start nieuwe Claude CLI sessie
 /claude-cli <vraag> - Claude CLI direct (snel)
 /omo <opdracht> - OpenCode CLI direct (code schrijven)
 
@@ -31,7 +33,7 @@ const COMMANDS = `
 /tree [folder] - Toon directory boom structuur
 /read <bestand> - Lees bestand inhoud
 /focus <bestand1> <bestand2> - Focus bestanden voor AI context
-/code <opdracht> - Laat Claude code schrijven/bewerken
+/code <opdracht> - Laat AI code schrijven/bewerken
 /patch <patch> - Pas patch toe op codebase
 /write <bestand> <inhoud> - Schrijf nieuw bestand
 /git <actie> [args] - Git versiebeheer (status, add, commit, log, init)
@@ -81,9 +83,9 @@ const COMMANDS = `
 const QUICK_REF = `
 *Quick Tips*
 
-- Chat direct met Claude - geen / nodig!
+- Chat direct met de AI - geen / nodig!
 - Gebruik /code help voor code specifieke opties
-- /focus helpt Claude beter begrijpen wat belangrijk is
+- /focus helpt de AI beter begrijpen wat belangrijk is
 - Tools zoals Write/Edit vragen om bevestiging
 
 *Gevaarlijke operaties vragen altijd bevestiging:*
@@ -120,7 +122,8 @@ export const DEFAULT_COMMANDS: Record<string, string> = {
   '/help': 'Alle commando\'s',
   '/status': 'Bot status',
   '/version': 'Versie info',
-  '/claude': 'Claude Code Chat',
+  '/llm': 'LLM provider kiezen',
+  '/claude': 'Claude CLI sessie',
   '/claude_status': 'Session status',
   '/claude_clear': 'Nieuwe sessie',
   '/claude-cli': 'Claude CLI direct',
@@ -131,7 +134,7 @@ export const DEFAULT_COMMANDS: Record<string, string> = {
   '/tree': 'Directory structuur',
   '/read': 'Bestand lezen',
   '/focus': 'AI context focus',
-  '/code': 'Code aanpassen',
+  '/code': 'Code aanpassen (LLM)',
   '/patch': 'Patch toepassen',
   '/write': 'Bestand schrijven',
   '/git': 'Git versiebeheer',

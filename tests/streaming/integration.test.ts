@@ -6,14 +6,14 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { StreamingMessageHandler, createStreamingMessageHandler } from '../../src/bot/handlers/streaming-message';
 import type { ApiMethods } from '../../src/api';
-import type { ClaudeCodeService } from '../../src/claude-code';
+import type { LLMRouter } from '../../src/llm';
 import { StreamStatus, ToolUseEvent, ToolResultEvent } from '../../src/streaming/types';
 import type { Message } from '../../src/types/telegram';
 
 describe('StreamingMessageHandler Integration', () => {
   let handler: StreamingMessageHandler;
   let mockApi: Record<string, jest.Mock>;
-  let mockClaudeCode: Record<string, jest.Mock>;
+  let mockRouter: Record<string, jest.Mock>;
 
   const createMockMessage = (overrides: Partial<Message> = {}): Message => ({
     message_id: 12345,
@@ -47,19 +47,13 @@ describe('StreamingMessageHandler Integration', () => {
       editMessageTextStream: jest.fn().mockResolvedValue(undefined),
     };
 
-    mockClaudeCode = {
-      processMessage: jest.fn(),
+    mockRouter = {
+      getProvider: jest.fn().mockReturnValue('zai'),
+      getProviderLabel: jest.fn().mockReturnValue('Z.ai GLM-4.7'),
       processMessageStream: jest.fn(),
-      createNewSession: jest.fn(),
-      switchSession: jest.fn(),
-      getActiveSession: jest.fn(),
-      deleteSession: jest.fn(),
-      endSession: jest.fn(),
-      getStats: jest.fn(),
-      destroy: jest.fn(),
     };
 
-    handler = createStreamingMessageHandler(mockApi as unknown as ApiMethods, mockClaudeCode as unknown as ClaudeCodeService);
+    handler = createStreamingMessageHandler(mockApi as unknown as ApiMethods, mockRouter as unknown as LLMRouter);
   });
 
   afterEach(() => {
@@ -73,7 +67,7 @@ describe('StreamingMessageHandler Integration', () => {
 
       await handler.handle(commandMessage);
 
-      expect(mockClaudeCode.processMessageStream).not.toHaveBeenCalled();
+      expect(mockRouter.processMessageStream).not.toHaveBeenCalled();
       expect(mockApi.sendMessage).not.toHaveBeenCalled();
     });
 
@@ -82,13 +76,13 @@ describe('StreamingMessageHandler Integration', () => {
 
       await handler.handle(emptyMessage);
 
-      expect(mockClaudeCode.processMessageStream).not.toHaveBeenCalled();
+      expect(mockRouter.processMessageStream).not.toHaveBeenCalled();
     });
 
     it('should send typing action and initial status message', async () => {
       const message = createMockMessage();
 
-      mockClaudeCode.processMessageStream.mockResolvedValue({
+      mockRouter.processMessageStream.mockResolvedValue({
         text: 'Response',
         sessionId: 'session-123',
         isNewSession: true,
@@ -114,7 +108,7 @@ describe('StreamingMessageHandler Integration', () => {
     it('should call processMessageStream with correct parameters', async () => {
       const message = createMockMessage({ text: 'Test message' });
 
-      mockClaudeCode.processMessageStream.mockResolvedValue({
+      mockRouter.processMessageStream.mockResolvedValue({
         text: 'Response',
         sessionId: 'session-123',
         isNewSession: true,
@@ -125,7 +119,7 @@ describe('StreamingMessageHandler Integration', () => {
 
       await handler.handle(message);
 
-      expect(mockClaudeCode.processMessageStream).toHaveBeenCalledWith(
+      expect(mockRouter.processMessageStream).toHaveBeenCalledWith(
         '67890',
         'Test message',
         expect.objectContaining({
@@ -140,7 +134,7 @@ describe('StreamingMessageHandler Integration', () => {
     it('should handle onStatusChange callback', async () => {
       const message = createMockMessage();
 
-      mockClaudeCode.processMessageStream.mockImplementation(async (_chatId, _message, callbacks) => {
+      mockRouter.processMessageStream.mockImplementation(async (_chatId, _message, callbacks) => {
         callbacks.onStatusChange?.(StreamStatus.THINKING);
         callbacks.onStatusChange?.(StreamStatus.RESPONSE);
         callbacks.onComplete?.({
@@ -177,7 +171,7 @@ describe('StreamingMessageHandler Integration', () => {
         timestamp: new Date(),
       };
 
-      mockClaudeCode.processMessageStream.mockImplementation(async (_chatId, _message, callbacks) => {
+      mockRouter.processMessageStream.mockImplementation(async (_chatId, _message, callbacks) => {
         callbacks.onToolUse?.(toolUse);
         callbacks.onComplete?.({
           text: 'Done',
@@ -217,7 +211,7 @@ describe('StreamingMessageHandler Integration', () => {
         timestamp: new Date(),
       };
 
-      mockClaudeCode.processMessageStream.mockImplementation(async (_chatId, _message, callbacks) => {
+      mockRouter.processMessageStream.mockImplementation(async (_chatId, _message, callbacks) => {
         callbacks.onToolResult?.(toolResult);
         callbacks.onComplete?.({
           text: 'Done',
@@ -250,7 +244,7 @@ describe('StreamingMessageHandler Integration', () => {
     it('should handle onError callback', async () => {
       const message = createMockMessage();
 
-      mockClaudeCode.processMessageStream.mockImplementation(async (_chatId, _message, callbacks) => {
+      mockRouter.processMessageStream.mockImplementation(async (_chatId, _message, callbacks) => {
         callbacks.onError?.(new Error('Test error'));
         return {
           text: '',
@@ -276,7 +270,7 @@ describe('StreamingMessageHandler Integration', () => {
       const message1 = createMockMessage({ message_id: 1, text: 'First' });
       const message2 = createMockMessage({ message_id: 2, text: 'Second' });
 
-      mockClaudeCode.processMessageStream
+      mockRouter.processMessageStream
         .mockResolvedValueOnce({
           text: 'Response 1',
           sessionId: 'sess-1',
@@ -293,7 +287,7 @@ describe('StreamingMessageHandler Integration', () => {
     it('should cleanup on completion', async () => {
       const message = createMockMessage();
 
-      mockClaudeCode.processMessageStream.mockResolvedValue({
+      mockRouter.processMessageStream.mockResolvedValue({
         text: 'Response',
         sessionId: 'session-123',
         isNewSession: true,
@@ -310,7 +304,7 @@ describe('StreamingMessageHandler Integration', () => {
 
   describe('createStreamingMessageHandler', () => {
     it('should create handler instance', () => {
-      const handler = createStreamingMessageHandler(mockApi as unknown as ApiMethods, mockClaudeCode as unknown as ClaudeCodeService);
+      const handler = createStreamingMessageHandler(mockApi as unknown as ApiMethods, mockRouter as unknown as LLMRouter);
       expect(handler).toBeInstanceOf(StreamingMessageHandler);
     });
   });

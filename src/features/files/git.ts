@@ -3,16 +3,16 @@
  * Simple git commands for version control
  */
 
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger({ prefix: 'Git' });
-const execAsync = promisify(exec);
+const execAsync = promisify(execFile);
 
-const FILES_DIR = '/tmp/telegram-bot/files';
+const FILES_DIR = process.env.FILES_DIR || '/tmp/telegram-bot/files';
 
 // =============================================================================
 // Types
@@ -52,11 +52,12 @@ export async function gitInit(chatId: string): Promise<boolean> {
       return false; // Already initialized
     }
 
-    await execAsync('git init', { cwd: userDir });
+    await execAsync('git', ['init'], { cwd: userDir });
     logger.info(`Git repository initialized for ${chatId}`);
     return true;
-  } catch (error: any) {
-    logger.error('Git init error', { error: error.message });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Git init error', { error: errorMessage });
     return false;
   }
 }
@@ -70,7 +71,7 @@ export async function gitStatus(chatId: string): Promise<GitStatus | null> {
   }
 
   try {
-    const { stdout } = await execAsync('git status --porcelain', { cwd: userDir });
+    const { stdout } = await execAsync('git', ['status', '--porcelain'], { cwd: userDir });
 
     const status: GitStatus = {
       branch: await getCurrentBranch(chatId),
@@ -110,7 +111,8 @@ export async function gitAdd(chatId: string, files?: string[]): Promise<boolean>
 
   try {
     const filesToAdd = files && files.length > 0 ? files.join(' ') : '.';
-    await execAsync(`git add ${filesToAdd}`, { cwd: userDir });
+    const args = files && files.length > 0 ? ['add', ...files] : ['add', '.'];
+    await execAsync('git', args, { cwd: userDir });
     logger.info(`Git add: ${filesToAdd} for ${chatId}`);
     return true;
   } catch (error: unknown) {
@@ -124,17 +126,16 @@ export async function gitCommit(chatId: string, message: string): Promise<boolea
   const userDir = path.join(FILES_DIR, chatId);
 
   try {
-    // Escape the message for shell
-    const escapedMessage = message.replace(/'/g, "'\\''");
-    await execAsync(`git commit -m '${escapedMessage}'`, { cwd: userDir });
+    await execAsync('git', ['commit', '-m', message], { cwd: userDir });
     logger.info(`Git commit for ${chatId}: ${message}`);
     return true;
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     // If nothing to commit, that's okay
-    if (error.message.includes('nothing to commit')) {
+    if (errorMessage.includes('nothing to commit')) {
       return true;
     }
-    logger.error('Git commit error', { error: error.message });
+    logger.error('Git commit error', { error: errorMessage });
     return false;
   }
 }
@@ -143,10 +144,12 @@ export async function gitLog(chatId: string, limit: number = 10): Promise<GitCom
   const userDir = path.join(FILES_DIR, chatId);
 
   try {
-    const { stdout } = await execAsync(
-      `git log -${limit} --pretty=format:'%H|%an|%ad|%s' --date=short`,
-      { cwd: userDir }
-    );
+    const { stdout } = await execAsync('git', [
+      'log',
+      `-${limit}`,
+      '--pretty=format:%H|%an|%ad|%s',
+      '--date=short',
+    ], { cwd: userDir });
 
     const commits: GitCommit[] = [];
 
@@ -173,12 +176,13 @@ export async function gitPush(chatId: string, remote: string = 'origin', branch?
 
   try {
     const branchArg = branch || await getCurrentBranch(chatId);
-    await execAsync(`git push ${remote} ${branchArg}`, { cwd: userDir });
+    await execAsync('git', ['push', remote, branchArg], { cwd: userDir });
     logger.info(`Git push for ${chatId} to ${remote}/${branchArg}`);
     return { success: true, message: `Gepusht naar ${remote}/${branchArg}` };
-  } catch (error: any) {
-    logger.error('Git push error', { error: error.message });
-    return { success: false, message: error.message || 'Push failed' };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Git push error', { error: errorMessage });
+    return { success: false, message: errorMessage || 'Push failed' };
   }
 }
 
@@ -187,12 +191,13 @@ export async function gitPull(chatId: string, remote: string = 'origin', branch?
 
   try {
     const branchArg = branch || await getCurrentBranch(chatId);
-    const { stdout } = await execAsync(`git pull ${remote} ${branchArg}`, { cwd: userDir });
+    const { stdout } = await execAsync('git', ['pull', remote, branchArg], { cwd: userDir });
     logger.info(`Git pull for ${chatId} from ${remote}/${branchArg}`);
     return { success: true, message: stdout.trim() || `Gepulled van ${remote}/${branchArg}` };
-  } catch (error: any) {
-    logger.error('Git pull error', { error: error.message });
-    return { success: false, message: error.message || 'Pull failed' };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Git pull error', { error: errorMessage });
+    return { success: false, message: errorMessage || 'Pull failed' };
   }
 }
 
@@ -210,12 +215,13 @@ export async function gitClone(chatId: string, url: string): Promise<{ success: 
       fs.mkdirSync(userDir, { recursive: true });
     }
 
-    await execAsync(`git clone ${url} .`, { cwd: userDir });
+    await execAsync('git', ['clone', url, '.'], { cwd: userDir });
     logger.info(`Git clone for ${chatId} from ${url}`);
     return { success: true, message: `Repository gekloond van ${url}` };
-  } catch (error: any) {
-    logger.error('Git clone error', { error: error.message });
-    return { success: false, message: error.message || 'Clone failed' };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Git clone error', { error: errorMessage });
+    return { success: false, message: errorMessage || 'Clone failed' };
   }
 }
 
@@ -224,22 +230,23 @@ export async function gitRemote(chatId: string, action: 'add' | 'remove' | 'list
 
   try {
     if (action === 'list') {
-      const { stdout } = await execAsync('git remote -v', { cwd: userDir });
+      const { stdout } = await execAsync('git', ['remote', '-v'], { cwd: userDir });
       const remotes = stdout.trim().split('\n').filter(Boolean);
       return { success: true, message: 'Remotes opgehaald', remotes };
     } else if (action === 'add' && name && url) {
-      await execAsync(`git remote add ${name} ${url}`, { cwd: userDir });
+      await execAsync('git', ['remote', 'add', name, url], { cwd: userDir });
       logger.info(`Git remote add for ${chatId}: ${name} -> ${url}`);
       return { success: true, message: `Remote '${name}' toegevoegd` };
     } else if (action === 'remove' && name) {
-      await execAsync(`git remote remove ${name}`, { cwd: userDir });
+      await execAsync('git', ['remote', 'remove', name], { cwd: userDir });
       logger.info(`Git remote remove for ${chatId}: ${name}`);
       return { success: true, message: `Remote '${name}' verwijderd` };
     }
     return { success: false, message: 'Ongeldige remote actie' };
-  } catch (error: any) {
-    logger.error('Git remote error', { error: error.message });
-    return { success: false, message: error.message || 'Remote actie failed' };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Git remote error', { error: errorMessage });
+    return { success: false, message: errorMessage || 'Remote actie failed' };
   }
 }
 
@@ -248,26 +255,27 @@ export async function gitBranch(chatId: string, action: 'list' | 'create' | 'del
 
   try {
     if (action === 'list') {
-      const { stdout } = await execAsync('git branch', { cwd: userDir });
+      const { stdout } = await execAsync('git', ['branch'], { cwd: userDir });
       const branches = stdout.trim().split('\n').map(b => b.trim()).filter(Boolean);
       return { success: true, message: 'Branches opgehaald', branches };
     } else if (action === 'create' && branchName) {
-      await execAsync(`git branch ${branchName}`, { cwd: userDir });
+      await execAsync('git', ['branch', branchName], { cwd: userDir });
       logger.info(`Git branch create for ${chatId}: ${branchName}`);
       return { success: true, message: `Branch '${branchName}' aangemaakt` };
     } else if (action === 'delete' && branchName) {
-      await execAsync(`git branch -d ${branchName}`, { cwd: userDir });
+      await execAsync('git', ['branch', '-d', branchName], { cwd: userDir });
       logger.info(`Git branch delete for ${chatId}: ${branchName}`);
       return { success: true, message: `Branch '${branchName}' verwijderd` };
     } else if (action === 'switch' && branchName) {
-      await execAsync(`git checkout ${branchName}`, { cwd: userDir });
+      await execAsync('git', ['checkout', branchName], { cwd: userDir });
       logger.info(`Git branch switch for ${chatId}: ${branchName}`);
       return { success: true, message: `Geswitched naar branch '${branchName}'` };
     }
     return { success: false, message: 'Ongeldige branch actie' };
-  } catch (error: any) {
-    logger.error('Git branch error', { error: error.message });
-    return { success: false, message: error.message || 'Branch actie failed' };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Git branch error', { error: errorMessage });
+    return { success: false, message: errorMessage || 'Branch actie failed' };
   }
 }
 
@@ -285,7 +293,7 @@ async function getCurrentBranch(chatId: string): Promise<string> {
   const userDir = path.join(FILES_DIR, chatId);
 
   try {
-    const { stdout } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: userDir });
+    const { stdout } = await execAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: userDir });
     return stdout.trim() || 'main';
   } catch {
     return 'main';

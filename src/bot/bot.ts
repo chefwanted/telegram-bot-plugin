@@ -14,6 +14,9 @@ import type { CommandHandler } from './handlers/command';
 import type { CallbackHandler } from './handlers/callback';
 import type { ZAIService } from '../zai';
 import { routeInlineQuery, type InlineContext } from '../features/inline';
+import { handleFileUpload } from '../features/files';
+import { validateIncomingText } from '../utils/input-validation';
+import { getRateLimitConfig, RateLimiter } from '../utils/rate-limit';
 
 // =============================================================================
 // Bot Options
@@ -71,11 +74,16 @@ export class TelegramBot {
   private messageHandler?: MessageHandler;
   private commandHandler?: CommandHandler;
   private callbackHandler?: CallbackHandler;
+  private rateLimiter = new RateLimiter();
+  private rateLimitConfig = getRateLimitConfig();
 
   constructor(options: BotOptions) {
     const apiOptions = this.buildApiClientOptions(options.options?.api);
     this.bot = new Bot(options.token, apiOptions ? { client: apiOptions } : undefined);
-    this.api = new ApiMethods(this.bot.api);
+    this.api = new ApiMethods(this.bot.api, {
+      token: options.token,
+      apiRoot: options.options?.api?.baseUrl,
+    });
 
     this.sessionManager = createSessionManager(
       options.options?.session
@@ -206,6 +214,54 @@ export class TelegramBot {
   private async processMessage(message: Message): Promise<void> {
     this.state.stats.totalMessages++;
 
+    const chatId = message.chat.id;
+    const userId = message.from?.id ?? 0;
+    const isUpload = !!(message.document || message.photo);
+    const isCommand = !!message.text?.startsWith('/');
+    const bucketKind = isUpload ? 'upload' : isCommand ? 'command' : 'message';
+
+    const limits =
+      bucketKind === 'upload'
+        ? this.rateLimitConfig.uploads
+        : bucketKind === 'command'
+          ? this.rateLimitConfig.commands
+          : this.rateLimitConfig.messages;
+
+    const decision = this.rateLimiter.check(`${chatId}:${userId}:${bucketKind}`, limits.limit, limits.windowMs);
+    if (!decision.allowed) {
+      // Avoid spamming on normal chatter; notify for commands/uploads only.
+      if (bucketKind !== 'message') {
+        const retrySec = Math.max(1, Math.ceil((decision.retryAfterMs || 0) / 1000));
+        await this.api.sendText(chatId, `⚠️ Rate limit bereikt. Probeer het over ${retrySec}s opnieuw.`);
+      }
+      return;
+    }
+
+    // Opportunistic cleanup to prevent unbounded growth.
+    if (Math.random() < 0.01) {
+      this.rateLimiter.sweep();
+    }
+
+    if (message.text) {
+      const validated = validateIncomingText(message.text);
+      if (!validated.ok) {
+        await this.api.sendText(
+          chatId,
+          `❌ Ongeldig bericht: ${validated.reason || 'onbekende reden'}`
+        );
+        return;
+      }
+
+      if (validated.value !== message.text) {
+        message = { ...message, text: validated.value };
+      }
+    }
+
+    if (message.document || message.photo) {
+      await handleFileUpload(this.api, message);
+      return;
+    }
+
     // Check if command
     if (message.text?.startsWith('/')) {
       this.state.stats.totalCommands++;
@@ -243,7 +299,7 @@ export class TelegramBot {
 
       await this.api.answerInlineQuery({
         inline_query_id: inlineQuery.id,
-        results: results as any[],
+        results,
         cache_time: 300,
         is_personal: false,
       });
@@ -323,7 +379,7 @@ export class TelegramBot {
         { command: 'claude', description: '🤖 Claude Code Chat' },
         { command: 'claude_status', description: '📊 Session status' },
         { command: 'claude_clear', description: '🗑️ Nieuwe sessie' },
-        { command: 'claude-cli', description: '⚡ Claude CLI direct' },
+        { command: 'claudecli', description: '⚡ Claude CLI direct' },
         { command: 'omo', description: '🔧 OpenCode CLI direct' },
 
         // Developer Tools
@@ -353,6 +409,10 @@ export class TelegramBot {
         { command: 'leaderboard', description: '🏆 Leaderboard' },
         { command: 'tool', description: '🔧 Custom tools' },
         { command: 'logs', description: '📋 Bot logs bekijken' },
+        { command: 'llm', description: '🧠 LLM provider wisselen' },
+        
+        // Admin (only visible in command hints)
+        { command: 'admin', description: '🔐 Admin commands' },
       ], 'all_private_chats');
       this.logger.info('Bot commands registered');
     } catch (error) {

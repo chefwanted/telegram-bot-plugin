@@ -6,6 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Message, CallbackQuery } from '../types/telegram';
+import { redactSensitive } from './redact';
 
 const LOGS_DIR = '/tmp/telegram-bot-logs';
 const LOG_FILE = path.join(LOGS_DIR, 'interactions.log');
@@ -183,7 +184,7 @@ export class TelegramLogger {
       userId,
       userName,
       messageId,
-      data,
+      data: redactSensitive(data) as Record<string, unknown>,
     };
   }
 
@@ -200,7 +201,7 @@ export class TelegramLogger {
       LogLevel.INFO,
       {
         textLength: text.length,
-        textPreview: text.substring(0, 100),
+        textPreview: redactSensitive(text.substring(0, 100)),
         hasEntities: (message.entities?.length || 0) > 0,
       }
     );
@@ -223,8 +224,8 @@ export class TelegramLogger {
       LogLevel.INFO,
       {
         command,
-        args,
         argsCount: args.length,
+        argsPreview: redactSensitive(args.join(' ').substring(0, 120)),
       }
     );
 
@@ -245,7 +246,7 @@ export class TelegramLogger {
       callback,
       LogLevel.INFO,
       {
-        data: callback.data,
+        data: redactSensitive(callback.data),
         messageId: callback.message?.message_id,
       }
     );

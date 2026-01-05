@@ -197,6 +197,7 @@ export class MessageStreamer {
       this.pendingUpdates.delete(key);
       this.updateThrottle.delete(key);
     }, throttleMs);
+    timeout.unref();
 
     this.updateThrottle.set(key, timeout);
   }

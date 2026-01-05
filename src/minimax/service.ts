@@ -4,8 +4,17 @@
  */
 
 import * as https from 'https';
-import type { MiniMaxServiceOptions, MiniMaxMessage, MiniMaxConversation, MiniMaxResponse } from './types';
+import type {
+  MiniMaxServiceOptions,
+  MiniMaxMessage,
+  MiniMaxConversation,
+  MiniMaxResponse,
+  MiniMaxChatResponse,
+} from './types';
 import { MiniMaxServiceError, MiniMaxRateLimitError, MiniMaxContentFilterError } from './types';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger({ prefix: 'MiniMax' });
 
 // Default system prompt for the bot
 const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant in Telegram.
@@ -34,14 +43,22 @@ export class MiniMaxService {
   /**
    * Process a message from a user and get AI response
    */
-  async processMessage(chatId: string, userMessage: string): Promise<MiniMaxResponse> {
-    return this.processMessageInternal(chatId, userMessage, this.options.systemPrompt);
+  async processMessage(
+    chatId: string,
+    userMessage: string,
+    options?: { model?: string }
+  ): Promise<MiniMaxResponse> {
+    return this.processMessageInternal(chatId, userMessage, this.options.systemPrompt, options?.model);
   }
 
   /**
    * Process a developer-focused message
    */
-  async processDeveloperMessage(chatId: string, userMessage: string): Promise<MiniMaxResponse> {
+  async processDeveloperMessage(
+    chatId: string,
+    userMessage: string,
+    options?: { model?: string }
+  ): Promise<MiniMaxResponse> {
     const devPrompt = `You are a senior software engineer helping via Telegram.
 - Default to Dutch if the user writes Dutch, otherwise mirror the user language.
 - Keep answers compact and actionable. Prefer bullet lists.
@@ -49,7 +66,7 @@ export class MiniMaxService {
 - Never invent files that don't exist; if context is missing, ask a clarifying question.
 - Maximum ~3500 characters per reply; if longer, summarize and offer to continue.`;
 
-    return this.processMessageInternal(chatId, userMessage, devPrompt);
+    return this.processMessageInternal(chatId, userMessage, devPrompt, options?.model);
   }
 
   /**
@@ -58,7 +75,8 @@ export class MiniMaxService {
   private async processMessageInternal(
     chatId: string,
     userMessage: string,
-    systemPrompt: string
+    systemPrompt: string,
+    modelOverride?: string
   ): Promise<MiniMaxResponse> {
     const conversation = this.getConversation(chatId);
 
@@ -71,7 +89,7 @@ export class MiniMaxService {
     const startTime = Date.now();
 
     try {
-      const response = await this.callMiniMaxAPI(conversation.messages, systemPrompt);
+      const response = await this.callMiniMaxAPI(conversation.messages, systemPrompt, modelOverride);
       const duration = Date.now() - startTime;
 
       // Extract response text
@@ -103,15 +121,25 @@ export class MiniMaxService {
   /**
    * Call MiniMax API with fallback to lite
    */
-  private async callMiniMaxAPI(messages: MiniMaxMessage[], systemPrompt: string): Promise<any> {
-    const model = this.useLite ? 'MiniMax-Lite' : this.options.model;
+  private async callMiniMaxAPI(
+    messages: MiniMaxMessage[],
+    systemPrompt: string,
+    modelOverride?: string
+  ): Promise<MiniMaxChatResponse> {
+    const model = modelOverride || (this.useLite ? 'MiniMax-Lite' : this.options.model);
 
     try {
       return await this.callAPI(model, messages, systemPrompt);
     } catch (error) {
+      // If override is set, try a one-off lite fallback without changing defaults
+      if (modelOverride && modelOverride !== 'MiniMax-Lite' && error instanceof MiniMaxServiceError) {
+        logger.warn('Override model failed, trying lite fallback...');
+        return await this.callAPI('MiniMax-Lite', messages, systemPrompt);
+      }
+
       // If not using lite and we get an error, try lite fallback
-      if (!this.useLite && error instanceof MiniMaxServiceError) {
-        console.log(`[MiniMax] Primary model failed, trying lite fallback...`);
+      if (!modelOverride && !this.useLite && error instanceof MiniMaxServiceError) {
+        logger.warn('Primary model failed, trying lite fallback...');
         this.useLite = true;
         return await this.callAPI('MiniMax-Lite', messages, systemPrompt);
       }
@@ -122,7 +150,7 @@ export class MiniMaxService {
   /**
    * Actual API call implementation
    */
-  private async callAPI(model: string, messages: MiniMaxMessage[], systemPrompt: string): Promise<any> {
+  private async callAPI(model: string, messages: MiniMaxMessage[], systemPrompt: string): Promise<MiniMaxChatResponse> {
     return new Promise((resolve, reject) => {
       const requestBody = JSON.stringify({
         model,
@@ -155,14 +183,14 @@ export class MiniMaxService {
 
         res.on('end', () => {
           try {
-            const response = JSON.parse(data);
+            const response: unknown = JSON.parse(data);
 
             if (res.statusCode !== 200) {
               this.handleAPIError(res.statusCode || 500, response);
               return;
             }
 
-            resolve(response);
+            resolve(response as MiniMaxChatResponse);
           } catch (parseError) {
             reject(new MiniMaxServiceError(`Failed to parse API response: ${parseError}`));
           }
@@ -181,30 +209,50 @@ export class MiniMaxService {
   /**
    * Handle API errors
    */
-  private handleAPIError(statusCode: number, errorData: any): never {
+  private handleAPIError(statusCode: number, errorData: unknown): never {
+    const message = this.getErrorMessage(errorData);
+    const code = this.getErrorCode(errorData);
+
     if (statusCode === 429) {
       throw new MiniMaxRateLimitError();
     }
 
     if (statusCode === 400) {
-      const message = errorData.error?.message || 'Content was filtered';
       throw new MiniMaxContentFilterError(message);
     }
 
     throw new MiniMaxServiceError(
-      errorData.error?.message || `API error: ${statusCode}`,
-      errorData.error?.code
+      message || `API error: ${statusCode}`,
+      code
     );
+  }
+
+  getModel(): string {
+    return this.options.model;
   }
 
   /**
    * Extract response text from API response
    */
-  private extractResponseText(response: any): string {
-    if (response.choices && response.choices.length > 0) {
-      return response.choices[0].message.content;
+  private extractResponseText(response: MiniMaxChatResponse): string {
+    if (Array.isArray(response.choices) && response.choices.length > 0) {
+      return response.choices[0]?.message?.content || 'No response from MiniMax';
     }
     return 'No response from MiniMax';
+  }
+
+  private getErrorMessage(errorData: unknown): string {
+    if (!errorData || typeof errorData !== 'object') return 'Unknown error';
+    const e = errorData as { error?: { message?: unknown } };
+    const msg = e.error?.message;
+    return typeof msg === 'string' ? msg : 'Unknown error';
+  }
+
+  private getErrorCode(errorData: unknown): string | undefined {
+    if (!errorData || typeof errorData !== 'object') return undefined;
+    const e = errorData as { error?: { code?: unknown } };
+    const code = e.error?.code;
+    return typeof code === 'string' ? code : undefined;
   }
 
   /**

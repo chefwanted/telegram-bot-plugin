@@ -64,7 +64,7 @@ export class BotCommandHandler implements CommandHandler {
     // Log all commands
     telegramLogger.logCommand(message, command, args);
 
-    this.logger.debug('Command received', { command, args });
+    this.logger.debug('Command received', { command, argsCount: args.length });
 
     const handler = this.commands.get(command);
 

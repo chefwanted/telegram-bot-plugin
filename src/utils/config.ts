@@ -5,6 +5,8 @@
 
 import type { PluginConfig, PluginOptions } from '../types/plugin';
 import { logger } from './logger';
+import type { SessionOptions } from '../types/session';
+import type { LogLevel, LoggerOptions } from './logger';
 
 // =============================================================================
 // Config Validation
@@ -35,6 +37,8 @@ export function loadConfig(): Partial<PluginConfig> {
     zaiApiKey: process.env.ZAI_API_KEY || process.env.ANTHROPIC_API_KEY,
     // MiniMax API key (additional fallback)
     miniMaxApiKey: process.env.MINIMAX_API_KEY,
+    // Mistral API key (additional provider)
+    mistralApiKey: process.env.MISTRAL_API_KEY,
     options: loadOptions(),
   };
 
@@ -43,6 +47,21 @@ export function loadConfig(): Partial<PluginConfig> {
 
 export function loadOptions(): PluginOptions | undefined {
   const options: PluginOptions = {};
+  const sessionStorage = parseEnumEnv<NonNullable<SessionOptions['storage']>>(
+    process.env.SESSION_STORAGE,
+    ['memory', 'redis', 'database'],
+    'memory'
+  );
+  const logLevel = parseEnumEnv<NonNullable<LoggerOptions['level']>>(
+    process.env.LOG_LEVEL,
+    ['debug', 'info', 'warn', 'error', 'silent'],
+    'info'
+  );
+  const logFormat = parseEnumEnv<NonNullable<LoggerOptions['format']>>(
+    process.env.LOG_FORMAT,
+    ['json', 'text'],
+    'text'
+  );
 
   // Polling options
   if (process.env.POLLING_ENABLED !== 'false') {
@@ -60,7 +79,7 @@ export function loadOptions(): PluginOptions | undefined {
     options.session = {
       ttl: parseInt(process.env.SESSION_TTL || '3600', 10),
       maxSessions: parseInt(process.env.SESSION_MAX || '1000', 10),
-      storage: (process.env.SESSION_STORAGE as any) || 'memory',
+      storage: sessionStorage,
       cleanupInterval: parseInt(process.env.SESSION_CLEANUP_INTERVAL || '60000', 10),
     };
   }
@@ -78,8 +97,8 @@ export function loadOptions(): PluginOptions | undefined {
   // Logging options
   if (process.env.LOG_LEVEL || process.env.LOG_FORMAT) {
     options.logging = {
-      level: (process.env.LOG_LEVEL as any) || 'info',
-      format: (process.env.LOG_FORMAT as any) || 'text',
+      level: logLevel,
+      format: logFormat,
     };
   }
 
@@ -171,6 +190,10 @@ export function mergeConfig(
   ...configs: Partial<PluginConfig>[]
 ): Partial<PluginConfig> {
   return configs.reduce((merged, config) => {
+    const webhook = merged.options?.webhook || config.options?.webhook
+      ? { ...merged.options?.webhook, ...config.options?.webhook }
+      : undefined;
+
     return {
       ...merged,
       ...config,
@@ -181,9 +204,18 @@ export function mergeConfig(
         session: { ...merged.options?.session, ...config.options?.session },
         api: { ...merged.options?.api, ...config.options?.api },
         logging: { ...merged.options?.logging, ...config.options?.logging },
-        webhook: { ...merged.options?.webhook, ...config.options?.webhook } as any,
+        webhook,
         claude: { ...merged.options?.claude, ...config.options?.claude },
       },
     } as Partial<PluginConfig>;
   }, {} as Partial<PluginConfig>);
+}
+
+function parseEnumEnv<T extends string>(
+  value: string | undefined,
+  allowed: readonly T[],
+  fallback: T
+): T {
+  const trimmed = value?.trim() as T | undefined;
+  return trimmed && allowed.includes(trimmed) ? trimmed : fallback;
 }

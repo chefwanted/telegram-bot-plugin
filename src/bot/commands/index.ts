@@ -19,3 +19,18 @@ export {
   claudeHelpCommand,
   ConversationInfo,
 } from './claude';
+
+// Admin Commands
+export {
+  adminCommand,
+  isAdmin,
+  addAdmin,
+  removeAdmin,
+  getAdminIds,
+  acquireLock,
+  releaseLock,
+  getCurrentLockPid,
+} from './admin';
+
+// Logs Command
+export { logsCommand } from './logs';
