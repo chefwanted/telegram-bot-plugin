@@ -50,6 +50,7 @@ export class Manager implements SessionManager {
         () => this.cleanup(),
         this.options.cleanupInterval
       );
+      this.cleanupTimer.unref();
     }
   }
 

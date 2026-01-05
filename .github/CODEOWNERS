@@ -1,0 +1,38 @@
+# Code Owners
+# These users will be automatically requested for review when someone opens a pull request
+
+# Default owners for everything in the repo
+* @WantedChef
+
+# Core bot functionality
+/src/bot/ @WantedChef
+/src/api/ @WantedChef
+
+# Claude integration
+/src/claude/ @WantedChef
+/src/claude-code/ @WantedChef
+/src/bridge/ @WantedChef
+
+# Features
+/src/features/ @WantedChef
+
+# Streaming
+/src/streaming/ @WantedChef
+
+# Database
+/src/database/ @WantedChef
+
+# Configuration and security
+/.github/ @WantedChef
+/SECURITY.md @WantedChef
+/.env.example @WantedChef
+
+# Documentation
+/docs/ @WantedChef
+/*.md @WantedChef
+
+# Tests
+/tests/ @WantedChef
+
+# CI/CD
+/.github/workflows/ @WantedChef

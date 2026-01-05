@@ -12,14 +12,6 @@ export { startCommand } from './start';
 // Status Command
 export { statusCommand } from './status';
 
-// Agent Commands
-export {
-  agentListCommand,
-  agentCallCommand,
-  registerAgentCallbacks,
-  forwardToAgent,
-} from './agent';
-
 // Claude Commands
 export {
   claudeStartCommand,

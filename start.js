@@ -1,5 +1,5 @@
-import 'dotenv/config';
-import { createPluginFromEnv } from './dist/index.js';
+require('dotenv/config');
+const { createPluginFromEnv } = require('./dist/index.js');
 
 const plugin = createPluginFromEnv();
 

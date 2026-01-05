@@ -21,14 +21,14 @@ Deze audit heeft een volledige analyse uitgevoerd van de telegram-bot-plugin cod
 
 ### 🔴 CRITICAL: Dependency Vulnerabilities
 
-#### node-telegram-bot-api Dependencies
-**Status:** ⚠️ Gedeeltelijk opgelost
-- **Issue:** Dependencies van node-telegram-bot-api (request, form-data, qs) hebben security vulnerabilities
+#### Telegram API Library Dependencies (grammY)
+**Status:** ✅ Opgelost (migratie naar grammY)
+- **Issue:** Legacy dependencies van node-telegram-bot-api (request, form-data, qs) hadden security vulnerabilities
 - **Impact:** High/Critical severity - DoS attacks, prototype pollution
-- **Current version:** 0.63.0 (downgraded from 0.67.0)
-- **Root cause:** node-telegram-bot-api gebruikt verouderde `request` package die deprecated is
+- **Current version:** grammY ^1.39.x
+- **Root cause:** node-telegram-bot-api gebruikte verouderde `request` package die deprecated is
 
-**Details:**
+**Details (historisch, pre-migratie):**
 ```
 - form-data <2.5.4 (CRITICAL) - Unsafe random function
 - qs <6.14.1 (HIGH) - DoS via memory exhaustion  
@@ -36,9 +36,9 @@ Deze audit heeft een volledige analyse uitgevoerd van de telegram-bot-plugin cod
 ```
 
 **Aanbeveling:**
-1. ✅ **DONE:** Downgrade naar 0.63.0 (minder vulnerabilities)
-2. ⚠️ **TODO:** Monitor voor updates van node-telegram-bot-api
-3. ⚠️ **TODO:** Overweeg alternatieve library (telegraf, grammY)
+1. ✅ **DONE:** Migratie naar grammY
+2. ⚠️ **TODO:** Monitor voor updates van grammY
+3. ⚠️ **TODO:** Beoordeel breaking changes in Telegram Bot API updates
 4. ⚠️ **TODO:** Implementeer Web Application Firewall voor extra bescherming
 
 ### ✅ FIXED: Console.log in Production
@@ -319,7 +319,7 @@ const worker = new Worker('telegram-messages', async job => {
 
 ### 🔴 Critical (Direct Actie Vereist)
 
-1. ⚠️ **Monitor node-telegram-bot-api updates** voor security fixes
+1. ⚠️ **Monitor grammY updates** voor security fixes
 2. ⚠️ **Implementeer rate limiting** tegen DoS
 3. ⚠️ **Verhoog test coverage** tot minimaal 60%
 4. ⚠️ **Add input validation** voor alle user inputs
@@ -358,7 +358,7 @@ De codebase is **functioneel** en heeft een **goede basis**, maar heeft **kritie
 - Dependencies: Gedowngrade naar veiligere versie (beperkt)
 
 ⚠️ **Blijvende zorgen:**
-- **Security:** Dependency vulnerabilities in node-telegram-bot-api
+- **Security:** Legacy dependency vulnerabilities resolved via grammY migratie
 - **Testing:** 11% coverage is veel te laag voor production
 - **Performance:** Geen rate limiting of caching
 - **Monitoring:** Geen metrics of alerting

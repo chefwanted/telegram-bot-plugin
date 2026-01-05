@@ -16,7 +16,6 @@ import { createStreamingMessageHandler } from './bot/handlers/streaming-message'
 import { getConfirmationManager } from './streaming/confirmation';
 import { helpCommand, DEFAULT_COMMANDS, startCommand } from './bot/commands';
 import { statusCommand } from './bot/commands/status';
-import { registerAgentCallbacks } from './bot/commands/agent';
 import { telegramLogger, LogLevel } from './utils/telegram-logger';
 import { ZAIService } from './zai';
 import { MiniMaxService } from './minimax';
@@ -84,6 +83,11 @@ import {
   gitAddCommand,
   gitCommitCommand,
   gitLogCommand,
+  gitPushCommand,
+  gitPullCommand,
+  gitCloneCommand,
+  gitRemoteCommand,
+  gitBranchCommand,
 } from './features/files';
 
 // Skills
@@ -567,10 +571,20 @@ class Plugin implements ITelegramBotPlugin {
         await gitCommitCommand(api, message, args.slice(1));
       } else if (action === 'log') {
         await gitLogCommand(api, message, args.slice(1));
+      } else if (action === 'push') {
+        await gitPushCommand(api, message, args.slice(1));
+      } else if (action === 'pull') {
+        await gitPullCommand(api, message, args.slice(1));
+      } else if (action === 'clone') {
+        await gitCloneCommand(api, message, args.slice(1));
+      } else if (action === 'remote') {
+        await gitRemoteCommand(api, message, args.slice(1));
+      } else if (action === 'branch') {
+        await gitBranchCommand(api, message, args.slice(1));
       } else {
         await api.sendMessage({
           chat_id: message.chat.id,
-          text: '📦 Git versiebeheer:\n/git init - Start repository\n/git status - Toon status\n/git add [bestanden] - Voeg toe aan staging\n/git commit <bericht> - Maak commit\n/git log [aantal] - Toon geschiedenis',
+          text: '📦 Git versiebeheer:\n/git init - Start repository\n/git status - Toon status\n/git add [bestanden] - Voeg toe aan staging\n/git commit <bericht> - Maak commit\n/git log [aantal] - Toon geschiedenis\n/git push [remote] [branch] - Push naar remote\n/git pull [remote] [branch] - Pull van remote\n/git clone <url> - Kloon repository\n/git remote [list|add|remove] - Beheer remotes\n/git branch [list|create|delete|switch] - Beheer branches',
         });
       }
     });
@@ -651,9 +665,6 @@ class Plugin implements ITelegramBotPlugin {
         await confirmationManager.handleCallback(callbackData, callbackQuery.id);
       }
     });
-
-    // Register agent callbacks
-    registerAgentCallbacks(callbackHandler);
 
     // Setup message handler - use StreamingMessageHandler for interactive responses
     const messageHandler = createStreamingMessageHandler(api, this.claudeCodeService);

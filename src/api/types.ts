@@ -3,61 +3,25 @@
  * Types voor Telegram API responses en errors
  */
 
-import type { ApiResponse } from '../types/telegram';
+import type { BotCommand, InlineQueryResult, Message } from 'grammy/types';
 
 // =============================================================================
 // Method Response Types
 // =============================================================================
 
-export interface SendMessageResponse {
-  message_id: number;
-  from?: {
-    id: number;
-    is_bot: boolean;
-    first_name: string;
-    username?: string;
-  };
-  chat: {
-    id: number;
-    type: string;
-  };
-  date: number;
-  text?: string;
-}
+export type SendMessageResponse = Message;
 
-export interface EditMessageTextResponse {
-  message_id?: number;
-  chat?: {
-    id: number;
-    type: string;
-  };
-  date?: number;
-  text?: string;
-  edit_date?: number;
-}
+export type EditMessageTextResponse = Message | true;
 
-export interface AnswerCallbackQueryResponse {
-  boolean: true;
-}
+export type AnswerCallbackQueryResponse = boolean;
 
-export interface AnswerInlineQueryResponse {
-  boolean: true;
-}
+export type AnswerInlineQueryResponse = boolean;
 
 // =============================================================================
 // Inline Query Types
 // =============================================================================
 
-export interface InlineQueryResult {
-  id: string;
-  type: 'article' | 'photo' | 'gif' | 'mpeg4_gif' | 'video' | 'audio' | 'voice' | 'document' | 'location' | 'contact' | 'game';
-  title?: string;
-  description?: string;
-  input_message_content: {
-    message_text: string;
-    parse_mode?: 'Markdown' | 'MarkdownV2' | 'HTML';
-  };
-}
+export type { InlineQueryResult, BotCommand };
 
 export interface AnswerInlineQueryRequest {
   inline_query_id: string;
@@ -88,19 +52,11 @@ export interface GetChatResponse {
   invite_link?: string;
 }
 
-export interface SetMyCommandsResponse {
-  ok: true;
-  result: boolean;
-}
+export type SetMyCommandsResponse = boolean;
 
 // =============================================================================
 // Bot Command Types
 // =============================================================================
-
-export interface BotCommand {
-  command: string;
-  description: string;
-}
 
 export interface SetMyCommandsRequest {
   commands: BotCommand[];

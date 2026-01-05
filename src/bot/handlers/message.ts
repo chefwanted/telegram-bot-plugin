@@ -5,6 +5,7 @@
 
 import type { Message } from '../../types/telegram';
 import type { ApiMethods } from '../../api';
+import { createSessionManager, type SessionManager } from '../../session';
 import { telegramLogger } from '../../utils/telegram-logger';
 
 // =============================================================================
@@ -23,10 +24,15 @@ export interface MessageHandler {
 // =============================================================================
 
 export class BaseMessageHandler implements MessageHandler {
+  private sessionManager: SessionManager;
+
   constructor(
     protected api: ApiMethods,
+    sessionManager?: SessionManager,
     protected logger = createLogger({ prefix: 'MessageHandler' })
-  ) {}
+  ) {
+    this.sessionManager = sessionManager ?? createSessionManager();
+  }
 
   async handle(message: Message): Promise<void> {
     this.logger.debug('Handling message', { messageId: message.message_id });
@@ -65,8 +71,7 @@ export class BaseMessageHandler implements MessageHandler {
     const userId = message.from?.id || 0;
     const chatId = message.chat.id;
 
-    // TODO: Get session manager
-    throw new Error('Session manager not available');
+    return this.sessionManager.getOrCreate(userId, chatId);
   }
 }
 
@@ -92,9 +97,17 @@ export class SimpleMessageHandler extends BaseMessageHandler {
     await this.handleMessageFn(message);
   }
 
-  protected override async getSession(_message: Message): Promise<import('../../types/session').Session> {
-    // Override to not use session
-    throw new Error('Session not supported in SimpleMessageHandler');
+  async handle(message: Message): Promise<void> {
+    this.logger.debug('Handling message (no session)', { messageId: message.message_id });
+    if (message.text) {
+      telegramLogger.logMessage(message, message.text);
+    }
+
+    if (message.text) {
+      await this.handleMessageFn(message);
+    } else {
+      this.logger.debug('Non-text message not handled');
+    }
   }
 }
 

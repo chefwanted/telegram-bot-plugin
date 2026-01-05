@@ -104,7 +104,7 @@ telegram-bot-plugin/
 ### Bestandsbeschrijvingen
 
 #### Root Bestanden
-- **package.json**: Bevat project metadata, dependencies (node-telegram-bot-api, axios, etc.), scripts voor build en test
+- **package.json**: Bevat project metadata, dependencies (grammy, axios, etc.), scripts voor build en test
 - **tsconfig.json**: TypeScript configuratie met strict mode, path aliases, en compiler opties
 - **README.md**: Project overzicht, installatie instructies, gebruik voorbeelden
 - **.gitignore**: Sluit node_modules, dist, .env, en andere build artifacts uit
@@ -119,9 +119,8 @@ Plugin entry point die de OpenCodePlugin interface implementeert. Exporteert de 
 - **plugin.ts**: Definieert plugin configuratie types zoals PluginConfig, PluginOptions
 
 #### src/api/
-- **client.ts**: Core HTTP client die axios gebruikt voor requests naar Telegram Bot API met retry logic en error handling
-- **methods.ts**: Wrappers voor Telegram API methoden zoals sendMessage, editMessageText, answerCallbackQuery
-- **types.ts**: API response types en error types
+- **methods.ts**: Wrapper rond grammY API methods zoals sendMessage, editMessageText, answerCallbackQuery
+- **types.ts**: API request/response types
 
 #### src/session/
 - **manager.ts**: Beheert sessies, creëert nieuwe sessies, haalt bestaande op, en verwerkt sessie timeouts
@@ -158,7 +157,7 @@ Unit tests voor alle componenten en integration tests voor end-to-end scenario's
 - **Agent**: Backend Specialist
 - **Beschrijving**:
   - Initialiseer een nieuw Node.js project met TypeScript support
-  - Configureer package.json met alle benodigde dependencies (node-telegram-bot-api, axios, typescript, @types/node, etc.)
+  - Configureer package.json met alle benodigde dependencies (grammy, axios, typescript, @types/node, etc.)
   - Stel tsconfig.json in met strict mode, ES2020 target, en path aliases (@/ voor src/)
   - Maak een .gitignore bestand aan dat node_modules, dist, .env, en andere build artifacts uitsluit
   - Maak een basis README.md aan met project titel, korte beschrijving, en placeholder secties voor installatie en gebruik
@@ -181,11 +180,11 @@ Unit tests voor alle componenten en integration tests voor end-to-end scenario's
 - **Files**: `src/types/telegram.ts`
 - **Agent**: TypeScript Specialist
 - **Beschrijving**:
-  - Definieer types voor Telegram API objecten zoals Update, Message, User, Chat, MessageEntity
-  - Definieer types voor InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
-  - Definieer types voor CallbackQuery, InlineQuery, ChosenInlineResult
-  - Definieer types voor API responses zoals ApiResponse, SendMessageResponse, GetUpdatesResponse
-  - Definieer error types zoals TelegramApiError, TelegramBotError
+  - Gebruik grammY/@grammyjs/types voor Telegram API objecten zoals Update, Message, User, Chat, MessageEntity
+  - Gebruik grammY types voor InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
+  - Gebruik grammY types voor CallbackQuery, InlineQuery, ChosenInlineResult
+  - Gebruik grammY ApiResponse types waar relevant
+  - Behoud error types zoals TelegramApiError, TelegramBotError voor interne compatibiliteit
 - **Dependencies**: Taak 1.2
 
 #### Taak 2.2: Session Management Types

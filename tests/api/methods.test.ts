@@ -4,17 +4,27 @@
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { ApiMethods, createApiMethods } from '../../src/api/methods';
-import type { ApiClient } from '../../src/api/client';
+import type { Api } from 'grammy';
 
 describe('ApiMethods', () => {
   let api: ApiMethods;
-  let mockClient: jest.Mocked<ApiClient>;
+  let mockApi: { raw: Record<string, jest.Mock> };
 
   beforeEach(() => {
-    mockClient = {
-      call: jest.fn().mockResolvedValue({ ok: true }),
-    } as unknown as jest.Mocked<ApiClient>;
-    api = new ApiMethods(mockClient);
+    mockApi = {
+      raw: {
+        sendMessage: jest.fn().mockResolvedValue({}),
+        editMessageText: jest.fn().mockResolvedValue({}),
+        deleteMessage: jest.fn().mockResolvedValue(true),
+        answerCallbackQuery: jest.fn().mockResolvedValue(true),
+        answerInlineQuery: jest.fn().mockResolvedValue(true),
+        getMe: jest.fn().mockResolvedValue({}),
+        getChat: jest.fn().mockResolvedValue({}),
+        setMyCommands: jest.fn().mockResolvedValue({ ok: true, result: true }),
+        sendChatAction: jest.fn().mockResolvedValue(true),
+      },
+    };
+    api = new ApiMethods(mockApi as unknown as Api);
   });
 
   describe('sendMessage', () => {
@@ -24,7 +34,7 @@ describe('ApiMethods', () => {
         text: 'Hello World',
       });
 
-      expect(mockClient.call).toHaveBeenCalledWith('sendMessage', {
+      expect(mockApi.raw.sendMessage).toHaveBeenCalledWith({
         chat_id: 12345,
         text: 'Hello World',
       });
@@ -39,7 +49,7 @@ describe('ApiMethods', () => {
         text: 'Updated text',
       });
 
-      expect(mockClient.call).toHaveBeenCalledWith('editMessageText', {
+      expect(mockApi.raw.editMessageText).toHaveBeenCalledWith({
         chat_id: 12345,
         message_id: 67890,
         text: 'Updated text',
@@ -51,7 +61,7 @@ describe('ApiMethods', () => {
     it('should delete message with correct params', async () => {
       await api.deleteMessage(12345, 67890);
 
-      expect(mockClient.call).toHaveBeenCalledWith('deleteMessage', {
+      expect(mockApi.raw.deleteMessage).toHaveBeenCalledWith({
         chat_id: 12345,
         message_id: 67890,
       });
@@ -64,7 +74,7 @@ describe('ApiMethods', () => {
         callback_query_id: 'abc123',
       });
 
-      expect(mockClient.call).toHaveBeenCalledWith('answerCallbackQuery', {
+      expect(mockApi.raw.answerCallbackQuery).toHaveBeenCalledWith({
         callback_query_id: 'abc123',
       });
     });
@@ -74,7 +84,7 @@ describe('ApiMethods', () => {
     it('should call getMe method', async () => {
       await api.getMe();
 
-      expect(mockClient.call).toHaveBeenCalledWith('getMe');
+      expect(mockApi.raw.getMe).toHaveBeenCalled();
     });
   });
 
@@ -82,7 +92,7 @@ describe('ApiMethods', () => {
     it('should get chat with correct id', async () => {
       await api.getChat(12345);
 
-      expect(mockClient.call).toHaveBeenCalledWith('getChat', {
+      expect(mockApi.raw.getChat).toHaveBeenCalledWith({
         chat_id: 12345,
       });
     });
@@ -90,7 +100,7 @@ describe('ApiMethods', () => {
     it('should get chat with string id', async () => {
       await api.getChat('@username');
 
-      expect(mockClient.call).toHaveBeenCalledWith('getChat', {
+      expect(mockApi.raw.getChat).toHaveBeenCalledWith({
         chat_id: '@username',
       });
     });
@@ -103,7 +113,7 @@ describe('ApiMethods', () => {
         action: 'typing',
       });
 
-      expect(mockClient.call).toHaveBeenCalledWith('sendChatAction', {
+      expect(mockApi.raw.sendChatAction).toHaveBeenCalledWith({
         chat_id: 12345,
         action: 'typing',
       });
@@ -125,7 +135,7 @@ describe('ApiMethods', () => {
 
       for (const action of actions) {
         await api.sendChatAction({ chat_id: 12345, action });
-        expect(mockClient.call).toHaveBeenCalledWith('sendChatAction', {
+        expect(mockApi.raw.sendChatAction).toHaveBeenCalledWith({
           chat_id: 12345,
           action,
         });
@@ -203,7 +213,7 @@ describe('ApiMethods', () => {
     it('should send simple text message', async () => {
       await api.sendText(12345, 'Hello');
 
-      expect(mockClient.call).toHaveBeenCalledWith('sendMessage', {
+      expect(mockApi.raw.sendMessage).toHaveBeenCalledWith({
         chat_id: 12345,
         text: 'Hello',
       });
@@ -214,7 +224,7 @@ describe('ApiMethods', () => {
         parse_mode: 'HTML',
       });
 
-      expect(mockClient.call).toHaveBeenCalledWith('sendMessage', {
+      expect(mockApi.raw.sendMessage).toHaveBeenCalledWith({
         chat_id: 12345,
         text: 'Hello',
         parse_mode: 'HTML',
@@ -228,7 +238,7 @@ describe('ApiMethods', () => {
 
       await api.sendWithKeyboard(12345, 'Hello', keyboard);
 
-      expect(mockClient.call).toHaveBeenCalledWith('sendMessage', {
+      expect(mockApi.raw.sendMessage).toHaveBeenCalledWith({
         chat_id: 12345,
         text: 'Hello',
         reply_markup: keyboard,
@@ -242,7 +252,7 @@ describe('ApiMethods', () => {
 
       await api.sendWithReplyKeyboard(12345, 'Hello', keyboard);
 
-      expect(mockClient.call).toHaveBeenCalledWith('sendMessage', {
+      expect(mockApi.raw.sendMessage).toHaveBeenCalledWith({
         chat_id: 12345,
         text: 'Hello',
         reply_markup: keyboard,
@@ -254,7 +264,7 @@ describe('ApiMethods', () => {
     it('should send message with remove keyboard', async () => {
       await api.removeKeyboard(12345, 'Keyboard removed');
 
-      expect(mockClient.call).toHaveBeenCalledWith('sendMessage', {
+      expect(mockApi.raw.sendMessage).toHaveBeenCalledWith({
         chat_id: 12345,
         text: 'Keyboard removed',
         reply_markup: { remove_keyboard: true },
@@ -271,7 +281,7 @@ describe('ApiMethods', () => {
 
       await api.setMyCommands({ commands });
 
-      expect(mockClient.call).toHaveBeenCalledWith('setMyCommands', {
+      expect(mockApi.raw.setMyCommands).toHaveBeenCalledWith({
         commands,
       });
     });
@@ -285,7 +295,7 @@ describe('ApiMethods', () => {
 
       await api.setupCommands(commands);
 
-      expect(mockClient.call).toHaveBeenCalledWith('setMyCommands', {
+      expect(mockApi.raw.setMyCommands).toHaveBeenCalledWith({
         commands,
         scope: undefined,
       });
@@ -296,7 +306,7 @@ describe('ApiMethods', () => {
 
       await api.setupCommands(commands, 'all_private_chats');
 
-      expect(mockClient.call).toHaveBeenCalledWith('setMyCommands', {
+      expect(mockApi.raw.setMyCommands).toHaveBeenCalledWith({
         commands,
         scope: { type: 'all_private_chats' },
       });
@@ -307,7 +317,7 @@ describe('ApiMethods', () => {
     it('should edit single message when under limit', async () => {
       await api.editMessageTextStream(12345, 67890, 'Short text');
 
-      expect(mockClient.call).toHaveBeenCalledWith('editMessageText', {
+      expect(mockApi.raw.editMessageText).toHaveBeenCalledWith({
         chat_id: 12345,
         message_id: 67890,
         text: 'Short text',
@@ -320,8 +330,8 @@ describe('ApiMethods', () => {
 
       await api.editMessageTextStream(12345, 67890, longText, { maxLength: 4000 });
 
-      // First call is edit with first chunk + continuation
-      expect(mockClient.call).toHaveBeenCalledTimes(2);
+      expect(mockApi.raw.editMessageText).toHaveBeenCalledTimes(1);
+      expect(mockApi.raw.sendMessage).toHaveBeenCalledTimes(1);
     });
 
     it('should call onChunkSent callback', async () => {
@@ -441,11 +451,13 @@ describe('ApiMethods', () => {
 
 describe('createApiMethods', () => {
   it('should create ApiMethods instance', () => {
-    const mockClient = {
-      call: jest.fn(),
-    } as unknown as ApiClient;
+    const mockApi = {
+      raw: {
+        sendMessage: jest.fn(),
+      },
+    } as unknown as Api;
 
-    const api = createApiMethods(mockClient);
+    const api = createApiMethods(mockApi);
 
     expect(api).toBeInstanceOf(ApiMethods);
   });

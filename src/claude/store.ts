@@ -184,5 +184,6 @@ export class ConversationStore {
         logger.info(`Cleaned up ${cleaned} expired conversation(s)`);
       }
     }, this.cleanupIntervalMs);
+    this.cleanupTimer.unref();
   }
 }

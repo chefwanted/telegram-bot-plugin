@@ -3,9 +3,9 @@
  * Telegram bot implementation met polling en handlers
  */
 
-import type { Update, Message } from '../types/telegram';
-import type { PluginOptions, PluginState } from '../types/plugin';
-import { ApiClient } from '../api/client';
+import { Bot, type ApiClientOptions, type PollingOptions as GrammyPollingOptions } from 'grammy';
+import type { Message } from '../types/telegram';
+import type { ApiOptions, PluginOptions, PluginState } from '../types/plugin';
 import { ApiMethods } from '../api/methods';
 import { createSessionManager, type SessionManager } from '../session';
 import { createLogger } from '../utils/logger';
@@ -35,7 +35,6 @@ export interface BotOptions {
 interface BotStateInternal {
   isRunning: boolean;
   isPolling: boolean;
-  lastUpdateId?: number;
   stats: {
     totalUpdates: number;
     totalMessages: number;
@@ -49,7 +48,7 @@ interface BotStateInternal {
 // =============================================================================
 
 export class TelegramBot {
-  private client: ApiClient;
+  private bot: Bot;
   private api: ApiMethods;
   private sessionManager: SessionManager;
   private zaiService?: ZAIService;
@@ -68,20 +67,15 @@ export class TelegramBot {
   };
 
   private startedAt?: Date;
-
-  private pollingTimer?: NodeJS.Timeout;
-  private pollInFlight = false;
+  private lastUpdateAt?: Date;
   private messageHandler?: MessageHandler;
   private commandHandler?: CommandHandler;
   private callbackHandler?: CallbackHandler;
 
   constructor(options: BotOptions) {
-    this.client = new ApiClient(
-      options.token,
-      options.options?.api
-    );
-
-    this.api = new ApiMethods(this.client);
+    const apiOptions = this.buildApiClientOptions(options.options?.api);
+    this.bot = new Bot(options.token, apiOptions ? { client: apiOptions } : undefined);
+    this.api = new ApiMethods(this.bot.api);
 
     this.sessionManager = createSessionManager(
       options.options?.session
@@ -92,6 +86,12 @@ export class TelegramBot {
 
     // Store plugin options
     this.pluginOptions = options.options;
+
+    // Configure API retry behavior if requested
+    this.configureApiRetries(options.options?.api);
+
+    // Register grammY handlers
+    this.registerBotHandlers();
 
     this.logger.info('Bot initialized');
   }
@@ -120,12 +120,13 @@ export class TelegramBot {
       // Setup bot commands (for / menu in Telegram)
       await this.setupCommands();
 
-      // Start polling
-      if (!this.options?.webhook) {
+      // Start polling unless webhook is configured or auto-start disabled
+      if (!this.options?.webhook && this.options?.polling?.autoStart !== false) {
         await this.startPolling();
       }
     } catch (error) {
       this.state.isRunning = false;
+      this.state.isPolling = false;
       this.logger.error('Failed to start bot', { error });
       throw error;
     }
@@ -143,12 +144,9 @@ export class TelegramBot {
     this.startedAt = undefined;
 
     // Stop polling
-    if (this.pollingTimer) {
-      clearTimeout(this.pollingTimer);
-      this.pollingTimer = undefined;
+    if (this.state.isPolling) {
+      await this.stopPolling();
     }
-
-    this.state.isPolling = false;
 
     // Cleanup Z.ai service
     if (this.zaiService) {
@@ -176,119 +174,31 @@ export class TelegramBot {
     this.state.isPolling = true;
     this.logger.debug('Started polling');
 
-    // Start the polling loop
-    void this.pollLoop();
+    const pollingOptions = this.buildPollingOptions();
+    try {
+      await this.bot.start(pollingOptions);
+    } catch (error) {
+      this.state.isPolling = false;
+      throw error;
+    }
   }
 
   /**
-   * Polling loop (robust, no recursive scheduling)
+   * Stop polling
    */
-  private async pollLoop(): Promise<void> {
-    // Prevent accidental multiple loops
-    if (this.pollInFlight) {
+  private async stopPolling(): Promise<void> {
+    if (!this.state.isPolling) {
       return;
     }
-    this.pollInFlight = true;
 
-    try {
-      while (this.state.isPolling && this.state.isRunning) {
-        try {
-          const updates = await this.getUpdates();
-
-          if (updates.length > 0) {
-            for (const update of updates) {
-              if (!this.state.isPolling || !this.state.isRunning) break;
-              await this.processUpdate(update);
-            }
-          }
-        } catch (error) {
-          this.state.stats.totalErrors++;
-          this.logger.error('Polling error', { error });
-
-          // Stop on error unless explicitly configured not to
-          if (this.options?.polling?.stopOnError !== false) {
-            this.state.isPolling = false;
-            break;
-          }
-        }
-
-        if (!this.state.isPolling || !this.state.isRunning) {
-          break;
-        }
-
-        const interval = this.options?.polling?.interval || 300;
-        await this.delay(interval);
-      }
-    } finally {
-      this.pollInFlight = false;
-    }
-  }
-
-  /**
-   * Delay helper for polling loop
-   */
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => {
-      this.pollingTimer = setTimeout(resolve, ms);
-    });
-  }
-
-  /**
-   * Haal updates van Telegram
-   */
-  private async getUpdates(): Promise<Update[]> {
-    const params: Record<string, unknown> = {};
-
-    if (this.state.lastUpdateId) {
-      params.offset = this.state.lastUpdateId + 1;
-    }
-
-    // Call returns response.data.result directly, which is Update[]
-    const updates = await this.client.call<Update[]>('getUpdates', params);
-
-    // Update last update ID
-    if (updates && updates.length > 0) {
-      this.state.lastUpdateId = updates[updates.length - 1].update_id;
-    }
-
-    return updates || [];
+    this.state.isPolling = false;
+    await this.bot.stop();
+    this.logger.debug('Stopped polling');
   }
 
   // ==========================================================================
   // Update Processing
   // ==========================================================================
-
-  /**
-   * Verwerk update
-   */
-  private async processUpdate(update: Update): Promise<void> {
-    this.state.stats.totalUpdates++;
-
-    try {
-      // Message update
-      if (update.message) {
-        await this.processMessage(update.message);
-      }
-
-      // Edited message
-      else if (update.edited_message) {
-        await this.processMessage(update.edited_message);
-      }
-
-      // Callback query
-      else if (update.callback_query) {
-        await this.processCallbackQuery(update.callback_query);
-      }
-
-      // Inline query
-      else if (update.inline_query) {
-        await this.processInlineQuery(update.inline_query);
-      }
-    } catch (error) {
-      this.state.stats.totalErrors++;
-      this.logger.error('Update processing error', { update, error });
-    }
-  }
 
   /**
    * Verwerk bericht
@@ -452,6 +362,103 @@ export class TelegramBot {
   }
 
   // ==========================================================================
+  // Internal Setup
+  // ==========================================================================
+
+  private registerBotHandlers(): void {
+    this.bot.use(async (ctx, next) => {
+      this.state.stats.totalUpdates++;
+      this.lastUpdateAt = new Date();
+      await next();
+    });
+
+    this.bot.on('message', async (ctx) => {
+      if (ctx.message) {
+        await this.processMessage(ctx.message);
+      }
+    });
+
+    this.bot.on('edited_message', async (ctx) => {
+      if (ctx.editedMessage) {
+        await this.processMessage(ctx.editedMessage);
+      }
+    });
+
+    this.bot.on('callback_query', async (ctx) => {
+      if (ctx.callbackQuery) {
+        await this.processCallbackQuery(ctx.callbackQuery);
+      }
+    });
+
+    this.bot.on('inline_query', async (ctx) => {
+      if (ctx.inlineQuery) {
+        await this.processInlineQuery(ctx.inlineQuery);
+      }
+    });
+
+    this.bot.catch((err) => {
+      this.state.stats.totalErrors++;
+      this.logger.error('Bot error', { error: err.error, update: err.ctx?.update });
+
+      if (this.options?.polling?.stopOnError !== false && this.state.isPolling) {
+        void this.stopPolling();
+      }
+    });
+  }
+
+  private buildApiClientOptions(options?: ApiOptions): ApiClientOptions {
+    const timeoutMs = options?.timeout ?? 30000;
+
+    return {
+      apiRoot: options?.baseUrl || 'https://api.telegram.org',
+      timeoutSeconds: Math.max(1, Math.ceil(timeoutMs / 1000)),
+    };
+  }
+
+  private configureApiRetries(options?: ApiOptions): void {
+    const maxRetries = options?.maxRetries ?? 3;
+    const retryDelay = options?.retryDelay ?? 1000;
+
+    if (maxRetries <= 0) {
+      return;
+    }
+
+    this.bot.api.config.use(async (prev, method, payload, signal) => {
+      let lastError: unknown;
+
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          return await prev(method, payload, signal);
+        } catch (error) {
+          lastError = error;
+          if (attempt === maxRetries) {
+            throw error;
+          }
+
+          await this.delay(retryDelay * (attempt + 1));
+        }
+      }
+
+      throw lastError;
+    });
+  }
+
+  private buildPollingOptions(): GrammyPollingOptions {
+    const polling = this.options?.polling;
+    const options: GrammyPollingOptions = {};
+
+    if (polling?.timeout) {
+      options.timeout = Math.max(1, Math.ceil(polling.timeout / 1000));
+    }
+
+    return options;
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // ==========================================================================
   // Handler Registration
   // ==========================================================================
 
@@ -506,14 +513,14 @@ export class TelegramBot {
 
   async getState(): Promise<PluginState> {
     const sessionCount = await this.sessionManager.count();
-    const apiCalls = this.client.getCallCount();
+    const apiCalls = this.api.getCallCount();
 
     return {
       isStarted: this.state.isRunning,
       isPolling: this.state.isPolling,
       sessionCount,
       startedAt: this.startedAt,
-      lastUpdateAt: undefined,
+      lastUpdateAt: this.lastUpdateAt,
       stats: {
         totalUpdates: this.state.stats.totalUpdates,
         totalMessages: this.state.stats.totalMessages,

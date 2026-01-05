@@ -168,6 +168,109 @@ export async function gitLog(chatId: string, limit: number = 10): Promise<GitCom
   }
 }
 
+export async function gitPush(chatId: string, remote: string = 'origin', branch?: string): Promise<{ success: boolean; message: string }> {
+  const userDir = path.join(FILES_DIR, chatId);
+
+  try {
+    const branchArg = branch || await getCurrentBranch(chatId);
+    await execAsync(`git push ${remote} ${branchArg}`, { cwd: userDir });
+    logger.info(`Git push for ${chatId} to ${remote}/${branchArg}`);
+    return { success: true, message: `Gepusht naar ${remote}/${branchArg}` };
+  } catch (error: any) {
+    logger.error('Git push error', { error: error.message });
+    return { success: false, message: error.message || 'Push failed' };
+  }
+}
+
+export async function gitPull(chatId: string, remote: string = 'origin', branch?: string): Promise<{ success: boolean; message: string }> {
+  const userDir = path.join(FILES_DIR, chatId);
+
+  try {
+    const branchArg = branch || await getCurrentBranch(chatId);
+    const { stdout } = await execAsync(`git pull ${remote} ${branchArg}`, { cwd: userDir });
+    logger.info(`Git pull for ${chatId} from ${remote}/${branchArg}`);
+    return { success: true, message: stdout.trim() || `Gepulled van ${remote}/${branchArg}` };
+  } catch (error: any) {
+    logger.error('Git pull error', { error: error.message });
+    return { success: false, message: error.message || 'Pull failed' };
+  }
+}
+
+export async function gitClone(chatId: string, url: string): Promise<{ success: boolean; message: string }> {
+  const userDir = path.join(FILES_DIR, chatId);
+
+  try {
+    // Check if directory is empty or doesn't exist
+    if (fs.existsSync(userDir)) {
+      const files = fs.readdirSync(userDir);
+      if (files.length > 0 && files.some(f => f !== '.git')) {
+        return { success: false, message: 'Directory niet leeg. Gebruik een lege directory.' };
+      }
+    } else {
+      fs.mkdirSync(userDir, { recursive: true });
+    }
+
+    await execAsync(`git clone ${url} .`, { cwd: userDir });
+    logger.info(`Git clone for ${chatId} from ${url}`);
+    return { success: true, message: `Repository gekloond van ${url}` };
+  } catch (error: any) {
+    logger.error('Git clone error', { error: error.message });
+    return { success: false, message: error.message || 'Clone failed' };
+  }
+}
+
+export async function gitRemote(chatId: string, action: 'add' | 'remove' | 'list', name?: string, url?: string): Promise<{ success: boolean; message: string; remotes?: string[] }> {
+  const userDir = path.join(FILES_DIR, chatId);
+
+  try {
+    if (action === 'list') {
+      const { stdout } = await execAsync('git remote -v', { cwd: userDir });
+      const remotes = stdout.trim().split('\n').filter(Boolean);
+      return { success: true, message: 'Remotes opgehaald', remotes };
+    } else if (action === 'add' && name && url) {
+      await execAsync(`git remote add ${name} ${url}`, { cwd: userDir });
+      logger.info(`Git remote add for ${chatId}: ${name} -> ${url}`);
+      return { success: true, message: `Remote '${name}' toegevoegd` };
+    } else if (action === 'remove' && name) {
+      await execAsync(`git remote remove ${name}`, { cwd: userDir });
+      logger.info(`Git remote remove for ${chatId}: ${name}`);
+      return { success: true, message: `Remote '${name}' verwijderd` };
+    }
+    return { success: false, message: 'Ongeldige remote actie' };
+  } catch (error: any) {
+    logger.error('Git remote error', { error: error.message });
+    return { success: false, message: error.message || 'Remote actie failed' };
+  }
+}
+
+export async function gitBranch(chatId: string, action: 'list' | 'create' | 'delete' | 'switch', branchName?: string): Promise<{ success: boolean; message: string; branches?: string[] }> {
+  const userDir = path.join(FILES_DIR, chatId);
+
+  try {
+    if (action === 'list') {
+      const { stdout } = await execAsync('git branch', { cwd: userDir });
+      const branches = stdout.trim().split('\n').map(b => b.trim()).filter(Boolean);
+      return { success: true, message: 'Branches opgehaald', branches };
+    } else if (action === 'create' && branchName) {
+      await execAsync(`git branch ${branchName}`, { cwd: userDir });
+      logger.info(`Git branch create for ${chatId}: ${branchName}`);
+      return { success: true, message: `Branch '${branchName}' aangemaakt` };
+    } else if (action === 'delete' && branchName) {
+      await execAsync(`git branch -d ${branchName}`, { cwd: userDir });
+      logger.info(`Git branch delete for ${chatId}: ${branchName}`);
+      return { success: true, message: `Branch '${branchName}' verwijderd` };
+    } else if (action === 'switch' && branchName) {
+      await execAsync(`git checkout ${branchName}`, { cwd: userDir });
+      logger.info(`Git branch switch for ${chatId}: ${branchName}`);
+      return { success: true, message: `Geswitched naar branch '${branchName}'` };
+    }
+    return { success: false, message: 'Ongeldige branch actie' };
+  } catch (error: any) {
+    logger.error('Git branch error', { error: error.message });
+    return { success: false, message: error.message || 'Branch actie failed' };
+  }
+}
+
 export async function gitIsRepo(chatId: string): Promise<boolean> {
   const userDir = path.join(FILES_DIR, chatId);
   const gitDir = path.join(userDir, '.git');

@@ -1,0 +1,128 @@
+name: ✨ Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+assignees:
+  - WantedChef
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! Please fill out the sections below.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Is your feature request related to a problem? Please describe.
+      placeholder: I'm always frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like
+      placeholder: A clear and concise description of what you want to happen
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe alternatives you've considered
+      placeholder: Alternative approaches or features
+
+  - type: dropdown
+    id: feature-type
+    attributes:
+      label: Feature Type
+      description: What type of feature is this?
+      options:
+        - New Command
+        - New Feature Module
+        - Enhancement to Existing Feature
+        - Integration with External Service
+        - Performance Improvement
+        - Developer Experience
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Critical (blocker for usage)
+        - High (very important)
+        - Medium (nice to have)
+        - Low (wishlist)
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-cases
+    attributes:
+      label: Use Cases
+      description: Describe specific use cases for this feature
+      placeholder: |
+        1. As a user, I want to...
+        2. When using the bot for...
+        3. This would help with...
+    validations:
+      required: true
+
+  - type: textarea
+    id: examples
+    attributes:
+      label: Examples
+      description: Provide examples of how this feature would work
+      placeholder: |
+        ```typescript
+        // Example code or command usage
+        ```
+      render: typescript
+
+  - type: textarea
+    id: mockups
+    attributes:
+      label: Mockups / Design
+      description: If applicable, add mockups or design ideas
+      placeholder: Add screenshots, diagrams, or design mockups
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context about the feature request
+      placeholder: Any additional information
+
+  - type: checkboxes
+    id: implementation
+    attributes:
+      label: Implementation Willingness
+      options:
+        - label: I am willing to submit a PR to implement this feature
+          required: false
+        - label: I can help with testing this feature
+          required: false
+        - label: I can help with documentation for this feature
+          required: false
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have searched existing issues and PRs to make sure this isn't a duplicate
+          required: true
+        - label: I have provided all the required information
+          required: true
+        - label: This feature aligns with the project's goals
+          required: true

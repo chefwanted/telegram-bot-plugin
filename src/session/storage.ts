@@ -255,6 +255,7 @@ export class MemoryStorage implements Storage {
         () => this.cleanup(),
         this.options.cleanupInterval
       );
+      this.cleanupTimer.unref();
     }
   }
 

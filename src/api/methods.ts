@@ -3,7 +3,7 @@
  * Type-safe wrappers voor Telegram Bot API methoden
  */
 
-import type { ApiClient } from './client';
+import type { Api } from 'grammy';
 import type {
   InlineKeyboardMarkup,
   ReplyKeyboardMarkup,
@@ -30,7 +30,22 @@ import type {
 // =============================================================================
 
 export class ApiMethods {
-  constructor(private client: ApiClient) {}
+  private callCount = 0;
+
+  constructor(private api: Api) {}
+
+  private async withCount<T>(fn: () => Promise<T>): Promise<T> {
+    this.callCount += 1;
+    return fn();
+  }
+
+  getCallCount(): number {
+    return this.callCount;
+  }
+
+  resetCallCount(): void {
+    this.callCount = 0;
+  }
 
   // ==========================================================================
   // Messaging Methods
@@ -42,7 +57,7 @@ export class ApiMethods {
   async sendMessage(
     request: SendMessageRequest
   ): Promise<SendMessageResponse> {
-    return this.client.call<SendMessageResponse>('sendMessage', request as unknown as Record<string, unknown>);
+    return this.withCount(() => this.api.raw.sendMessage(request as any));
   }
 
   /**
@@ -51,10 +66,7 @@ export class ApiMethods {
   async editMessageText(
     request: EditMessageTextRequest
   ): Promise<EditMessageTextResponse> {
-    return this.client.call<EditMessageTextResponse>(
-      'editMessageText',
-      request as unknown as Record<string, unknown>
-    );
+    return this.withCount(() => this.api.raw.editMessageText(request as any));
   }
 
   /**
@@ -64,10 +76,10 @@ export class ApiMethods {
     chatId: number | string,
     messageId: number
   ): Promise<boolean> {
-    return this.client.call<boolean>('deleteMessage', {
+    return this.withCount(() => this.api.raw.deleteMessage({
       chat_id: chatId,
       message_id: messageId,
-    });
+    }));
   }
 
   // ==========================================================================
@@ -80,10 +92,7 @@ export class ApiMethods {
   async answerCallbackQuery(
     request: AnswerCallbackQueryRequest
   ): Promise<AnswerCallbackQueryResponse> {
-    return this.client.call<AnswerCallbackQueryResponse>(
-      'answerCallbackQuery',
-      request as unknown as Record<string, unknown>
-    );
+    return this.withCount(() => this.api.raw.answerCallbackQuery(request as any));
   }
 
   /**
@@ -92,10 +101,7 @@ export class ApiMethods {
   async answerInlineQuery(
     request: AnswerInlineQueryRequest
   ): Promise<AnswerInlineQueryResponse> {
-    return this.client.call<AnswerInlineQueryResponse>(
-      'answerInlineQuery',
-      request as unknown as Record<string, unknown>
-    );
+    return this.withCount(() => this.api.raw.answerInlineQuery(request as any));
   }
 
   // ==========================================================================
@@ -106,24 +112,25 @@ export class ApiMethods {
    * Haal bot informatie op
    */
   async getMe(): Promise<GetMeResponse> {
-    return this.client.call<GetMeResponse>('getMe');
+    return this.withCount(() => this.api.raw.getMe());
   }
 
   /**
    * Haal chat informatie op
    */
   async getChat(chatId: number | string): Promise<GetChatResponse> {
-    return this.client.call<GetChatResponse>('getChat', {
+    return this.withCount(() => this.api.raw.getChat({
       chat_id: chatId,
-    });
+    }));
   }
 
   /**
    * Haal chat foto op
    */
   async getChatPhoto(chatId: number | string): Promise<object> {
-    return this.client.call<object>('getChatPhoto', {
-      chat_id: chatId,
+    return this.withCount(async () => {
+      const chat = await this.api.raw.getChat({ chat_id: chatId });
+      return (chat as { photo?: object }).photo || {};
     });
   }
 
@@ -131,7 +138,7 @@ export class ApiMethods {
    * Stel bot commando's in (voor / menu in Telegram)
    */
   async setMyCommands(request: SetMyCommandsRequest): Promise<SetMyCommandsResponse> {
-    return this.client.call<SetMyCommandsResponse>('setMyCommands', request as unknown as Record<string, unknown>);
+    return this.withCount(() => this.api.raw.setMyCommands(request as any));
   }
 
   /**
@@ -263,7 +270,7 @@ export class ApiMethods {
     chat_id: number | string;
     action: 'typing' | 'upload_photo' | 'record_video' | 'upload_video' | 'record_voice' | 'upload_voice' | 'upload_document' | 'find_location' | 'record_video_note' | 'upload_video_note';
   }): Promise<boolean> {
-    return this.client.call<boolean>('sendChatAction', params as unknown as Record<string, unknown>);
+    return this.withCount(() => this.api.raw.sendChatAction(params as any));
   }
 
   /**
@@ -449,6 +456,6 @@ export class ApiMethods {
 // Export Factory
 // =============================================================================
 
-export function createApiMethods(client: ApiClient): ApiMethods {
-  return new ApiMethods(client);
+export function createApiMethods(api: Api): ApiMethods {
+  return new ApiMethods(api);
 }

@@ -1,0 +1,289 @@
+name: PR Automation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  pr-labeler:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Label PR based on files changed
+        uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auto-label based on size
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const additions = pr.additions;
+            const deletions = pr.deletions;
+            const total = additions + deletions;
+            
+            let sizeLabel = '';
+            if (total < 10) sizeLabel = 'size/XS';
+            else if (total < 50) sizeLabel = 'size/S';
+            else if (total < 200) sizeLabel = 'size/M';
+            else if (total < 500) sizeLabel = 'size/L';
+            else sizeLabel = 'size/XL';
+            
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              labels: [sizeLabel]
+            });
+
+  pr-checker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR title format
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const title = pr.title;
+            
+            // Check for conventional commit format
+            const conventionalCommitPattern = /^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\(.+\))?!?: .+/;
+            
+            if (!conventionalCommitPattern.test(title)) {
+              const comment = `⚠️ **PR Title Format**
+              
+              Please use [Conventional Commits](https://www.conventionalcommits.org/) format for the PR title:
+              
+              \`\`\`
+              <type>[optional scope]: <description>
+              \`\`\`
+              
+              **Types:** feat, fix, docs, style, refactor, perf, test, chore, ci, build, revert
+              
+              **Examples:**
+              - \`feat(auth): add login functionality\`
+              - \`fix(api): resolve timeout issue\`
+              - \`docs: update README with new features\`
+              `;
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: comment
+              });
+            }
+
+      - name: Check for breaking changes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+            
+            if (body.toLowerCase().includes('breaking change') || pr.title.includes('!')) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: ['breaking-change']
+              });
+              
+              const comment = `⚠️ **Breaking Change Detected**
+              
+              This PR contains breaking changes. Please ensure:
+              1. The CHANGELOG is updated
+              2. Migration guide is provided
+              3. Version bump is appropriate (major version)
+              `;
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: comment
+              });
+            }
+
+  pr-welcome:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened'
+    steps:
+      - name: Welcome first-time contributors
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const author = pr.user.login;
+            
+            // Check if this is the first PR from this author
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'all'
+            });
+            
+            const authorPRs = prs.filter(p => p.user.login === author);
+            
+            if (authorPRs.length === 1) {
+              const message = `👋 **Welcome @${author}!**
+              
+              Thank you for your first contribution to this project! 🎉
+              
+              A maintainer will review your PR soon. In the meantime, please make sure:
+              - ✅ Tests are passing
+              - ✅ Code follows project conventions
+              - ✅ Documentation is updated if needed
+              
+              Feel free to ask questions if you need help!
+              `;
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: message
+              });
+            }
+
+  pr-reviewer-assignment:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened'
+    steps:
+      - name: Auto-assign reviewers
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            
+            // Get potential reviewers (exclude PR author)
+            const reviewers = ['WantedChef']; // Add your team members here
+            const filteredReviewers = reviewers.filter(r => r !== pr.user.login);
+            
+            if (filteredReviewers.length > 0) {
+              await github.rest.pulls.requestReviewers({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                reviewers: filteredReviewers.slice(0, 2) // Assign max 2 reviewers
+              });
+            }
+
+  pr-checklist:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened'
+    steps:
+      - name: Add PR checklist
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+            
+            // Only add checklist if not already present
+            if (!body.includes('- [ ]') && !body.includes('- [x]')) {
+              const checklist = `
+              ## 📋 PR Checklist
+              
+              Please check if your PR fulfills the following requirements:
+              
+              - [ ] Tests for the changes have been added
+              - [ ] Documentation has been updated
+              - [ ] Code follows the project style guidelines
+              - [ ] All tests are passing
+              - [ ] No new warnings or errors introduced
+              - [ ] Breaking changes are documented
+              `;
+              
+              const updatedBody = body + '\n\n' + checklist;
+              
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                body: updatedBody
+              });
+            }
+
+  pr-stats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate PR statistics
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            
+            // Get PR files
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number
+            });
+            
+            const stats = {
+              files: files.length,
+              additions: pr.additions,
+              deletions: pr.deletions,
+              changes: pr.additions + pr.deletions,
+              tsFiles: files.filter(f => f.filename.endsWith('.ts')).length,
+              testFiles: files.filter(f => f.filename.includes('.test.')).length
+            };
+            
+            const comment = `## 📊 PR Statistics
+            
+            | Metric | Value |
+            |--------|-------|
+            | Files Changed | ${stats.files} |
+            | Lines Added | +${stats.additions} |
+            | Lines Deleted | -${stats.deletions} |
+            | Total Changes | ${stats.changes} |
+            | TypeScript Files | ${stats.tsFiles} |
+            | Test Files | ${stats.testFiles} |
+            
+            ${stats.testFiles === 0 ? '⚠️ **No test files changed. Consider adding tests.**' : ''}
+            `;
+            
+            // Check if stats comment already exists
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number
+            });
+            
+            const statsComment = comments.find(c => 
+              c.body.includes('📊 PR Statistics') && c.user.type === 'Bot'
+            );
+            
+            if (statsComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: statsComment.id,
+                body: comment
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: comment
+              });
+            }

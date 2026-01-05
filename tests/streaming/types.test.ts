@@ -431,9 +431,9 @@ describe('getErrorSuggestions', () => {
   });
 });
 
-describe('ERROR_SUGGESTIONS', () => {
-  it('should have all error patterns', () => {
-    expect(ERROR_SUGGESTIONS.length).toBe(6);
+  describe('ERROR_SUGGESTIONS', () => {
+    it('should have all error patterns', () => {
+      expect(ERROR_SUGGESTIONS.length).toBe(7);
 
     const patterns = ERROR_SUGGESTIONS.map(e => e.errorPattern.source);
     expect(patterns.some(p => p.includes('permission'))).toBe(true);

@@ -19,6 +19,11 @@ import {
   gitCommit,
   gitLog,
   gitIsRepo,
+  gitPush,
+  gitPull,
+  gitClone,
+  gitRemote,
+  gitBranch,
   formatGitStatus,
   formatGitLog,
 } from './git';
@@ -314,4 +319,251 @@ export async function gitLogCommand(api: ApiMethods, message: Message, args: str
   const text = formatGitLog(commits);
 
   await api.sendMessage({ chat_id: message.chat.id, text, parse_mode: 'Markdown' });
+}
+
+export async function gitPushCommand(api: ApiMethods, message: Message, args: string[] = []): Promise<void> {
+  const isRepo = await gitIsRepo(String(message.chat.id));
+
+  if (!isRepo) {
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: '❌ Geen git repository gevonden.\n\nGebruik /git init om te starten.',
+    });
+    return;
+  }
+
+  const remote = args[0] || 'origin';
+  const branch = args[1];
+
+  const result = await gitPush(String(message.chat.id), remote, branch);
+
+  if (result.success) {
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: `✅ ${result.message}`,
+    });
+  } else {
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: `❌ Push failed: ${result.message}`,
+    });
+  }
+}
+
+export async function gitPullCommand(api: ApiMethods, message: Message, args: string[] = []): Promise<void> {
+  const isRepo = await gitIsRepo(String(message.chat.id));
+
+  if (!isRepo) {
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: '❌ Geen git repository gevonden.\n\nGebruik /git init om te starten.',
+    });
+    return;
+  }
+
+  const remote = args[0] || 'origin';
+  const branch = args[1];
+
+  const result = await gitPull(String(message.chat.id), remote, branch);
+
+  if (result.success) {
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: `✅ ${result.message}`,
+    });
+  } else {
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: `❌ Pull failed: ${result.message}`,
+    });
+  }
+}
+
+export async function gitCloneCommand(api: ApiMethods, message: Message, args: string[]): Promise<void> {
+  const url = args[0];
+
+  if (!url) {
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: '❌ Gebruik: /git clone <url>\n\nVoorbeeld: /git clone https://github.com/user/repo.git',
+    });
+    return;
+  }
+
+  const result = await gitClone(String(message.chat.id), url);
+
+  if (result.success) {
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: `✅ ${result.message}`,
+    });
+  } else {
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: `❌ Clone failed: ${result.message}`,
+    });
+  }
+}
+
+export async function gitRemoteCommand(api: ApiMethods, message: Message, args: string[] = []): Promise<void> {
+  const isRepo = await gitIsRepo(String(message.chat.id));
+
+  if (!isRepo) {
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: '❌ Geen git repository gevonden.\n\nGebruik /git init om te starten.',
+    });
+    return;
+  }
+
+  const action = args[0] as 'add' | 'remove' | 'list' | undefined;
+
+  if (!action || action === 'list') {
+    const result = await gitRemote(String(message.chat.id), 'list');
+    if (result.success && result.remotes) {
+      const text = result.remotes.length > 0
+        ? `🔗 *Git Remotes*\n\n${result.remotes.join('\n')}`
+        : '📋 Geen remotes geconfigureerd.';
+      await api.sendMessage({
+        chat_id: message.chat.id,
+        text,
+        parse_mode: 'Markdown',
+      });
+    } else {
+      await api.sendMessage({
+        chat_id: message.chat.id,
+        text: '❌ Kon remotes niet ophalen.',
+      });
+    }
+    return;
+  }
+
+  if (action === 'add') {
+    const name = args[1];
+    const url = args[2];
+
+    if (!name || !url) {
+      await api.sendMessage({
+        chat_id: message.chat.id,
+        text: '❌ Gebruik: /git remote add <naam> <url>\n\nVoorbeeld: /git remote add origin https://github.com/user/repo.git',
+      });
+      return;
+    }
+
+    const result = await gitRemote(String(message.chat.id), 'add', name, url);
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: result.success ? `✅ ${result.message}` : `❌ ${result.message}`,
+    });
+  } else if (action === 'remove') {
+    const name = args[1];
+
+    if (!name) {
+      await api.sendMessage({
+        chat_id: message.chat.id,
+        text: '❌ Gebruik: /git remote remove <naam>\n\nVoorbeeld: /git remote remove origin',
+      });
+      return;
+    }
+
+    const result = await gitRemote(String(message.chat.id), 'remove', name);
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: result.success ? `✅ ${result.message}` : `❌ ${result.message}`,
+    });
+  } else {
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: '❌ Onbekende remote actie.\n\nGebruik: list, add of remove',
+    });
+  }
+}
+
+export async function gitBranchCommand(api: ApiMethods, message: Message, args: string[] = []): Promise<void> {
+  const isRepo = await gitIsRepo(String(message.chat.id));
+
+  if (!isRepo) {
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: '❌ Geen git repository gevonden.\n\nGebruik /git init om te starten.',
+    });
+    return;
+  }
+
+  const action = args[0] as 'list' | 'create' | 'delete' | 'switch' | undefined;
+
+  if (!action || action === 'list') {
+    const result = await gitBranch(String(message.chat.id), 'list');
+    if (result.success && result.branches) {
+      const text = result.branches.length > 0
+        ? `🌿 *Git Branches*\n\n${result.branches.join('\n')}`
+        : '📋 Geen branches gevonden.';
+      await api.sendMessage({
+        chat_id: message.chat.id,
+        text,
+        parse_mode: 'Markdown',
+      });
+    } else {
+      await api.sendMessage({
+        chat_id: message.chat.id,
+        text: '❌ Kon branches niet ophalen.',
+      });
+    }
+    return;
+  }
+
+  if (action === 'create') {
+    const branchName = args[1];
+
+    if (!branchName) {
+      await api.sendMessage({
+        chat_id: message.chat.id,
+        text: '❌ Gebruik: /git branch create <naam>\n\nVoorbeeld: /git branch create feature-x',
+      });
+      return;
+    }
+
+    const result = await gitBranch(String(message.chat.id), 'create', branchName);
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: result.success ? `✅ ${result.message}` : `❌ ${result.message}`,
+    });
+  } else if (action === 'delete') {
+    const branchName = args[1];
+
+    if (!branchName) {
+      await api.sendMessage({
+        chat_id: message.chat.id,
+        text: '❌ Gebruik: /git branch delete <naam>\n\nVoorbeeld: /git branch delete feature-x',
+      });
+      return;
+    }
+
+    const result = await gitBranch(String(message.chat.id), 'delete', branchName);
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: result.success ? `✅ ${result.message}` : `❌ ${result.message}`,
+    });
+  } else if (action === 'switch') {
+    const branchName = args[1];
+
+    if (!branchName) {
+      await api.sendMessage({
+        chat_id: message.chat.id,
+        text: '❌ Gebruik: /git branch switch <naam>\n\nVoorbeeld: /git branch switch main',
+      });
+      return;
+    }
+
+    const result = await gitBranch(String(message.chat.id), 'switch', branchName);
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: result.success ? `✅ ${result.message}` : `❌ ${result.message}`,
+    });
+  } else {
+    await api.sendMessage({
+      chat_id: message.chat.id,
+      text: '❌ Onbekende branch actie.\n\nGebruik: list, create, delete of switch',
+    });
+  }
 }

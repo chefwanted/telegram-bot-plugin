@@ -1,0 +1,72 @@
+# Label PRs based on files changed
+
+# Features
+'feature':
+  - 'src/features/**/*'
+
+# Bot
+'bot':
+  - 'src/bot/**/*'
+
+# API
+'api':
+  - 'src/api/**/*'
+
+# Claude Integration
+'claude':
+  - 'src/claude/**/*'
+  - 'src/claude-code/**/*'
+  - 'src/bridge/**/*'
+
+# Streaming
+'streaming':
+  - 'src/streaming/**/*'
+
+# Session Management
+'session':
+  - 'src/session/**/*'
+
+# Database
+'database':
+  - 'src/database/**/*'
+
+# Tests
+'tests':
+  - 'tests/**/*'
+  - '**/*.test.ts'
+  - '**/*.spec.ts'
+
+# Documentation
+'documentation':
+  - '**/*.md'
+  - 'docs/**/*'
+
+# Configuration
+'config':
+  - '*.json'
+  - '*.yml'
+  - '*.yaml'
+  - '.github/**/*'
+
+# Dependencies
+'dependencies':
+  - 'package.json'
+  - 'package-lock.json'
+
+# CI/CD
+'ci/cd':
+  - '.github/workflows/**/*'
+
+# Security
+'security':
+  - 'SECURITY.md'
+  - 'src/utils/config.ts'
+
+# Utilities
+'utils':
+  - 'src/utils/**/*'
+
+# Types
+'types':
+  - 'src/types/**/*'
+  - '**/*.d.ts'

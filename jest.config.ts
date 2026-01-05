@@ -22,5 +22,4 @@ export default {
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   testTimeout: 10000,
   verbose: true,
-  forceExit: true,
 };

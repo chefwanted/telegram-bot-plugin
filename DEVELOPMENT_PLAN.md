@@ -60,7 +60,7 @@ src/
 ### Dependencies
 
 **Core:**
-- `node-telegram-bot-api` ^0.67.0
+- `grammy` ^1.39.2
 - `@anthropic-ai/sdk` ^0.71.2
 - `better-sqlite3` ^12.5.0
 

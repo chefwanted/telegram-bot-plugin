@@ -72,7 +72,7 @@ If you discover a security vulnerability, please report it by:
 ### v2.2.0 (January 2026)
 
 - Fixed critical vulnerability in form-data dependency
-- Updated node-telegram-bot-api to v0.63.0
+- Migrated Telegram API layer to grammY to remove legacy request-based dependencies
 - Removed console.log statements leaking sensitive data
 - Replaced 'any' types with proper TypeScript types
 - Added proper error handling and logging
