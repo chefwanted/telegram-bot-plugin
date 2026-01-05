@@ -156,12 +156,16 @@ export class MemoryStorage implements Storage {
 // =============================================================================
 
 export function createStorage(
-  type: 'memory' = 'memory',
+  type: 'memory' | 'redis' | 'database' = 'memory',
   options?: MemoryStorageOptions
 ): Storage {
   switch (type) {
     case 'memory':
       return new MemoryStorage(options);
+    case 'redis':
+      throw new Error('Redis storage not yet implemented');
+    case 'database':
+      throw new Error('Database storage not yet implemented');
     default:
       throw new Error(`Unsupported storage type: ${type}`);
   }

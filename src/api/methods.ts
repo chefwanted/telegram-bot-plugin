@@ -37,7 +37,7 @@ export class ApiMethods {
   async sendMessage(
     request: SendMessageRequest
   ): Promise<SendMessageResponse> {
-    return this.client.call<SendMessageResponse>('sendMessage', request);
+    return this.client.call<SendMessageResponse>('sendMessage', request as unknown as Record<string, unknown>);
   }
 
   /**
@@ -48,7 +48,7 @@ export class ApiMethods {
   ): Promise<EditMessageTextResponse> {
     return this.client.call<EditMessageTextResponse>(
       'editMessageText',
-      request
+      request as unknown as Record<string, unknown>
     );
   }
 
@@ -77,7 +77,7 @@ export class ApiMethods {
   ): Promise<AnswerCallbackQueryResponse> {
     return this.client.call<AnswerCallbackQueryResponse>(
       'answerCallbackQuery',
-      request
+      request as unknown as Record<string, unknown>
     );
   }
 

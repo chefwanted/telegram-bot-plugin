@@ -44,11 +44,11 @@ export interface SessionData {
 export interface AgentState {
   /** Huidige agent waarmee interactie is */
   currentAgent?: string;
-  ** Status van de agent */
+  /** Status van de agent */
   status: 'idle' | 'busy' | 'waiting_for_input';
-  ** Wachtrij van berichten naar de agent */
+  /** Wachtrij van berichten naar de agent */
   messageQueue: QueuedMessage[];
-  ** Laatste interactie timestamp */
+  /** Laatste interactie timestamp */
   lastInteractionAt: Date;
 }
 
@@ -68,13 +68,13 @@ export interface QueuedMessage {
 // =============================================================================
 
 export interface UserPreferences {
-  ** Voorkeurstaal */
+  /** Voorkeurstaal */
   language?: 'nl' | 'en';
-  ** Notificaties aan/uit */
+  /** Notificaties aan/uit */
   notifications?: boolean;
-  ** Tijdzone */
+  /** Tijdzone */
   timezone?: string;
-  ** Andere preferences */
+  /** Andere preferences */
   custom?: Record<string, unknown>;
 }
 
@@ -121,7 +121,7 @@ export interface Storage {
 // =============================================================================
 
 export interface SessionManager {
-  ** Creëer nieuwe sessie */
+  /** Creëer nieuwe sessie */
   create(userId: number, chatId: number, options?: SessionOptions): Promise<Session>;
   /** Haal sessie op */
   get(id: string): Promise<Session | null>;
@@ -131,10 +131,12 @@ export interface SessionManager {
   delete(id: string): Promise<boolean>;
   /** Haal of creëer sessie */
   getOrCreate(userId: number, chatId: number, options?: SessionOptions): Promise<Session>;
-  ** Cleanup vervallen sessies */
+  /** Cleanup vervallen sessies */
   cleanup(): Promise<number>;
-  ** Get aantal actieve sessies */
+  /** Get aantal actieve sessies */
   count(): Promise<number>;
+  /** Cleanup en stop */
+  destroy(): void;
 }
 
 // =============================================================================

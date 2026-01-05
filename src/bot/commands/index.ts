@@ -19,3 +19,11 @@ export {
   registerAgentCallbacks,
   forwardToAgent,
 } from './agent';
+
+// Claude Commands
+export {
+  claudeStartCommand,
+  claudeStatusCommand,
+  claudeClearCommand,
+  claudeHelpCommand,
+} from './claude';

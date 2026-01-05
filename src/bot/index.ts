@@ -12,3 +12,6 @@ export * from './handlers';
 
 // Commands
 export * from './commands';
+
+// Bridge
+export * from '../bridge';

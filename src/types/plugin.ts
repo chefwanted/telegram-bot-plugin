@@ -19,11 +19,11 @@ export interface PluginOptions {
   polling?: PollingOptions;
   /** Sessie opties */
   session?: SessionPluginOptions;
-  ** API opties */
+  /** API opties */
   api?: ApiOptions;
-  ** Logging opties */
+  /** Logging opties */
   logging?: LoggingOptions;
-  ** Webhook opties (alternatief voor polling) */
+  /** Webhook opties (alternatief voor polling) */
   webhook?: WebhookOptions;
 }
 
@@ -144,7 +144,7 @@ export interface PluginState {
   isPolling: boolean;
   /** Aantal actieve sessies */
   sessionCount: number;
-  ** Start timestamp */
+  /** Start timestamp */
   startedAt?: Date;
   /** Laatste update timestamp */
   lastUpdateAt?: Date;
@@ -215,6 +215,6 @@ export interface OpenCodeMessage {
   content: string;
   /** Timestamp */
   timestamp: Date;
-  ** Bericht ID */
+  /** Bericht ID */
   id: string;
 }

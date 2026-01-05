@@ -98,7 +98,7 @@ export function createAgentResponseHandler(
 
   return async (event: OpenCodeEvent) => {
     if (event.type === 'agent.response') {
-      const message = event.payload as OpenCodeMessage;
+      const message = event.payload as unknown as OpenCodeMessage;
       await messageHandler.handleOpenCodeMessage(message);
     }
   };

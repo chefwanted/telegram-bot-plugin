@@ -19,12 +19,18 @@ import {
   statusCommand,
   registerAgentCallbacks,
 } from './bot/commands';
+import {
+  claudeStartCommand,
+  claudeStatusCommand,
+  claudeClearCommand,
+  claudeHelpCommand,
+} from './bot/commands/claude';
 
 // =============================================================================
 // Plugin Interface
 // =============================================================================
 
-export interface TelegramBotPlugin {
+export interface ITelegramBotPlugin {
   /** Start de plugin */
   start(): Promise<void>;
 
@@ -45,7 +51,7 @@ export interface TelegramBotPlugin {
 // Plugin Implementation
 // =============================================================================
 
-class Plugin implements TelegramBotPlugin {
+class Plugin implements ITelegramBotPlugin {
   private bot: TelegramBot;
   private eventDispatcher: EventDispatcher;
   private logger: Logger;
@@ -138,19 +144,30 @@ class Plugin implements TelegramBotPlugin {
     // Setup command handler
     const commandHandler = createCommandHandler(api);
 
-    // Register commands
-    commandHandler.registerCommand('/help', async (message, _args) => {
-      const commands = {
-        ...DEFAULT_COMMANDS,
-        '/agent': 'Interactie met agents',
-      };
-      await helpCommand(api, message, commands);
-    });
-
+    // Register Claude commands
     commandHandler.registerCommand('/start', async (message, _args) => {
-      await startCommand(api, message);
+      await claudeStartCommand(api, message);
     });
 
+    commandHandler.registerCommand('/claude-status', async (message, _args) => {
+      const bridge = this.bot.claudeBridgeInstance;
+      if (bridge) {
+        await claudeStatusCommand(api, message, bridge);
+      }
+    });
+
+    commandHandler.registerCommand('/claude-clear', async (message, _args) => {
+      const bridge = this.bot.claudeBridgeInstance;
+      if (bridge) {
+        await claudeClearCommand(api, message, bridge);
+      }
+    });
+
+    commandHandler.registerCommand('/help', async (message, _args) => {
+      await claudeHelpCommand(api, message);
+    });
+
+    // Regular commands
     commandHandler.registerCommand('/status', async (message, _args) => {
       await statusCommand(api, message, {
         isRunning: this.bot.isRunning,
@@ -192,7 +209,7 @@ class Plugin implements TelegramBotPlugin {
 /**
  * Create plugin from config
  */
-export function createPlugin(config: PluginConfig): TelegramBotPlugin {
+export function createPlugin(config: PluginConfig): ITelegramBotPlugin {
   if (!validateConfig(config)) {
     throw new Error('Invalid plugin configuration');
   }
@@ -203,7 +220,7 @@ export function createPlugin(config: PluginConfig): TelegramBotPlugin {
 /**
  * Create plugin from environment variables
  */
-export function createPluginFromEnv(): TelegramBotPlugin {
+export function createPluginFromEnv(): ITelegramBotPlugin {
   const envConfig = loadConfig();
 
   if (!validateConfig(envConfig)) {
@@ -220,7 +237,7 @@ export function createPluginFromEnv(): TelegramBotPlugin {
  */
 export async function createPluginFromFile(
   path: string
-): Promise<TelegramBotPlugin> {
+): Promise<ITelegramBotPlugin> {
   const fileConfig = await import(path);
   const mergedConfig = mergeConfig(loadConfig(), fileConfig.default || fileConfig);
 
@@ -244,4 +261,4 @@ export default {
 
 // Named exports
 export { PluginConfig, PluginState, OpenCodeEvent } from './types/plugin';
-export { TelegramBotPlugin } from './index';
+export type { ITelegramBotPlugin as TelegramBotPlugin } from './index';

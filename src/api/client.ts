@@ -12,6 +12,8 @@ import type {
 import type {
   RequestConfig,
   RequestResult,
+} from './types';
+import {
   ApiRequestError,
   ApiTimeoutError,
   ApiRetryExhaustedError,
@@ -149,14 +151,14 @@ export class ApiClient {
       const formDataInstance = new FormDataClass();
 
       for (const [key, value] of Object.entries(formData)) {
-        formDataInstance.append(key, value);
+        (formDataInstance as any).append(key, value);
       }
 
       const response = await this.axios.post<ApiResponse<T>>(
         url,
         formDataInstance,
         {
-          headers: formDataInstance.getHeaders?.() || {},
+          headers: (formDataInstance as any).getHeaders?.() || {},
           timeout: this.config.timeout * 2, // Dubbele timeout voor uploads
         }
       );

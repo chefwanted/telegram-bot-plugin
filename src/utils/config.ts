@@ -86,6 +86,10 @@ export function loadOptions(): PluginOptions | undefined {
       port: parseInt(process.env.WEBHOOK_PORT || '3000', 10),
       host: process.env.WEBHOOK_HOST || '0.0.0.0',
       path: process.env.WEBHOOK_PATH || '/telegram-webhook',
+      healthCheck: {
+        path: '/health',
+        enabled: true,
+      },
     };
   }
 
@@ -163,8 +167,8 @@ export function mergeConfig(
         session: { ...merged.options?.session, ...config.options?.session },
         api: { ...merged.options?.api, ...config.options?.api },
         logging: { ...merged.options?.logging, ...config.options?.logging },
-        webhook: { ...merged.options?.webhook, ...config.options?.webhook },
+        webhook: { ...merged.options?.webhook, ...config.options?.webhook } as any,
       },
-    };
+    } as Partial<PluginConfig>;
   }, {} as Partial<PluginConfig>);
 }

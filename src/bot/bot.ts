@@ -12,6 +12,7 @@ import { createLogger } from '../utils/logger';
 import type { MessageHandler } from './handlers/message';
 import type { CommandHandler } from './handlers/command';
 import type { CallbackHandler } from './handlers/callback';
+import { createClaudeBridge, type ClaudeBridge } from '../bridge/claude';
 
 // =============================================================================
 // Bot Options
@@ -48,6 +49,7 @@ export class TelegramBot {
   private client: ApiClient;
   private api: ApiMethods;
   private sessionManager: SessionManager;
+  private claudeBridge?: ClaudeBridge;
   private logger = createLogger({ prefix: 'Bot' });
 
   private state: BotStateInternal = {
@@ -78,6 +80,9 @@ export class TelegramBot {
       options.options?.session
     );
 
+    // Create Claude bridge
+    this.claudeBridge = createClaudeBridge(this.api);
+
     this.logger.info('Bot initialized');
   }
 
@@ -100,6 +105,12 @@ export class TelegramBot {
       // Verify bot token
       const me = await this.api.getMe();
       this.logger.info(`Started bot: @${me.username}`);
+
+      // Start Claude bridge processing
+      if (this.claudeBridge) {
+        this.claudeBridge.startProcessing();
+        this.logger.info('Claude bridge started');
+      }
 
       // Start polling
       if (!this.options?.webhook) {
@@ -205,12 +216,14 @@ export class TelegramBot {
       params
     );
 
+    const updates = response.result || [];
+
     // Update last update ID
-    if (response.length > 0) {
-      this.state.lastUpdateId = response[response.length - 1].update_id;
+    if (updates.length > 0) {
+      this.state.lastUpdateId = updates[updates.length - 1].update_id;
     }
 
-    return response;
+    return updates;
   }
 
   // ==========================================================================
@@ -265,6 +278,11 @@ export class TelegramBot {
     } else if (this.messageHandler) {
       await this.messageHandler.handle(message);
     }
+
+    // Also send to Claude bridge if not a command
+    if (this.claudeBridge && message.text && !message.text.startsWith('/')) {
+      await this.claudeBridge.processTelegramMessage(message);
+    }
   }
 
   /**
@@ -311,6 +329,10 @@ export class TelegramBot {
 
   get sessions(): SessionManager {
     return this.sessionManager;
+  }
+
+  get claudeBridgeInstance(): ClaudeBridge | undefined {
+    return this.claudeBridge;
   }
 
   get isRunning(): boolean {
