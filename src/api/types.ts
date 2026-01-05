@@ -61,6 +61,29 @@ export interface GetChatResponse {
   invite_link?: string;
 }
 
+export interface SetMyCommandsResponse {
+  ok: true;
+  result: boolean;
+}
+
+// =============================================================================
+// Bot Command Types
+// =============================================================================
+
+export interface BotCommand {
+  command: string;
+  description: string;
+}
+
+export interface SetMyCommandsRequest {
+  commands: BotCommand[];
+  scope?: {
+    type: 'default' | 'all_private_chats' | 'all_group_chats' | 'all_chat_administrators';
+    chat_id?: number | string;
+  };
+  language_code?: string;
+}
+
 // =============================================================================
 // Request Types
 // =============================================================================

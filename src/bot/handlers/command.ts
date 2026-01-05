@@ -116,10 +116,12 @@ export class BotCommandHandler implements CommandHandler {
 
   /**
    * Parse command from message text
+   * Normalizes hyphens to underscores for compatibility
    */
   private parseCommand(text: string): { command: string; args: string[] } {
     const parts = text.trim().split(/\s+/);
-    const command = parts[0].toLowerCase();
+    // Normalize: /claude-status -> /claude_status
+    const command = parts[0].toLowerCase().replace(/-/g, '_');
     const args = parts.slice(1);
 
     return { command, args };
@@ -138,12 +140,13 @@ export class BotCommandHandler implements CommandHandler {
       );
     });
 
-    // Start command
+    // Start command - redirect to extended welcome (handled in index.ts)
+    // This is a fallback that won't be reached since /start is registered in index.ts
     this.registerCommand('/start', async (message) => {
       const userName = message.from?.first_name || 'gebruiker';
       await this.api.sendText(
         message.chat.id,
-        `Hallo ${userName}! Ik ben een Telegram bot. Gebruik /help voor beschikbare commando's.`
+        `Hallo ${userName}! Gebruik /help voor alle beschikbare commando's.`
       );
     });
   }

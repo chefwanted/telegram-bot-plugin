@@ -18,6 +18,9 @@ import type {
   AnswerCallbackQueryResponse,
   GetMeResponse,
   GetChatResponse,
+  SetMyCommandsRequest,
+  SetMyCommandsResponse,
+  BotCommand,
 } from './types';
 
 // =============================================================================
@@ -107,6 +110,23 @@ export class ApiMethods {
   async getChatPhoto(chatId: number | string): Promise<object> {
     return this.client.call<object>('getChatPhoto', {
       chat_id: chatId,
+    });
+  }
+
+  /**
+   * Stel bot commando's in (voor / menu in Telegram)
+   */
+  async setMyCommands(request: SetMyCommandsRequest): Promise<SetMyCommandsResponse> {
+    return this.client.call<SetMyCommandsResponse>('setMyCommands', request as unknown as Record<string, unknown>);
+  }
+
+  /**
+   * Helper: Stel commando's in met een array van {command, description}
+   */
+  async setupCommands(commands: BotCommand[], scope?: 'default' | 'all_private_chats' | 'all_group_chats' | 'all_chat_administrators'): Promise<SetMyCommandsResponse> {
+    return this.setMyCommands({
+      commands,
+      scope: scope ? { type: scope } : undefined,
     });
   }
 

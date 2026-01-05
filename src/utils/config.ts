@@ -31,7 +31,8 @@ export function validateConfig(config: Partial<PluginConfig>): config is PluginC
 export function loadConfig(): Partial<PluginConfig> {
   const config: Partial<PluginConfig> = {
     botToken: process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN,
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+    // Prefer Z.ai API key over Anthropic
+    zaiApiKey: process.env.ZAI_API_KEY || process.env.ANTHROPIC_API_KEY,
     options: loadOptions(),
   };
 

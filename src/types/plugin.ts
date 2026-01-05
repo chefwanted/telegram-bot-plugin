@@ -10,8 +10,10 @@
 export interface PluginConfig {
   /** Telegram Bot token */
   botToken: string;
-  /** Anthropic API key for Claude integration */
+  /** Anthropic API key for Claude integration (deprecated, use zaiApiKey) */
   anthropicApiKey?: string;
+  /** Z.ai API key for GLM-4.7 integration */
+  zaiApiKey?: string;
   /** Plugin opties */
   options?: PluginOptions;
 }

@@ -12,7 +12,7 @@ import { createLogger } from '../utils/logger';
 import type { MessageHandler } from './handlers/message';
 import type { CommandHandler } from './handlers/command';
 import type { CallbackHandler } from './handlers/callback';
-import type { ClaudeService } from '../claude';
+import type { ZAIService } from '../zai';
 
 // =============================================================================
 // Bot Options
@@ -23,8 +23,8 @@ export interface BotOptions {
   token: string;
   /** Plugin options */
   options?: PluginOptions;
-  /** Claude service for AI responses */
-  claudeService?: ClaudeService;
+  /** Z.ai service for AI responses */
+  zaiService?: ZAIService;
 }
 
 // =============================================================================
@@ -51,7 +51,7 @@ export class TelegramBot {
   private client: ApiClient;
   private api: ApiMethods;
   private sessionManager: SessionManager;
-  private claudeService?: ClaudeService;
+  private zaiService?: ZAIService;
   private logger = createLogger({ prefix: 'Bot' });
 
   private state: BotStateInternal = {
@@ -82,8 +82,8 @@ export class TelegramBot {
       options.options?.session
     );
 
-    // Store Claude service
-    this.claudeService = options.claudeService;
+    // Store Z.ai service
+    this.zaiService = options.zaiService;
 
     this.logger.info('Bot initialized');
   }
@@ -107,6 +107,9 @@ export class TelegramBot {
       // Verify bot token
       const me = await this.api.getMe();
       this.logger.info(`Started bot: @${me.username}`);
+
+      // Setup bot commands (for / menu in Telegram)
+      await this.setupCommands();
 
       // Start polling
       if (!this.options?.webhook) {
@@ -137,9 +140,9 @@ export class TelegramBot {
 
     this.state.isPolling = false;
 
-    // Cleanup Claude service
-    if (this.claudeService) {
-      this.claudeService.destroy();
+    // Cleanup Z.ai service
+    if (this.zaiService) {
+      this.zaiService.destroy();
     }
 
     // Cleanup session manager
@@ -272,9 +275,9 @@ export class TelegramBot {
       await this.messageHandler.handle(message);
     }
 
-    // Also send to Claude service if not a command
-    if (this.claudeService && message.text && !message.text.startsWith('/')) {
-      await this.processWithClaude(message);
+    // Also send to Z.ai service if not a command
+    if (this.zaiService && message.text && !message.text.startsWith('/')) {
+      await this.processWithZAI(message);
     }
   }
 
@@ -288,15 +291,15 @@ export class TelegramBot {
   }
 
   /**
-   * Verwerk bericht met Claude
+   * Verwerk bericht met Z.ai
    */
-  private async processWithClaude(message: Message): Promise<void> {
+  private async processWithZAI(message: Message): Promise<void> {
     if (!message.text || !message.chat) {
       return;
     }
 
     try {
-      const response = await this.claudeService!.processMessage(
+      const response = await this.zaiService!.processMessage(
         String(message.chat.id),
         message.text
       );
@@ -304,7 +307,7 @@ export class TelegramBot {
       // Send response to Telegram
       await this.api.sendMessage({ chat_id: message.chat.id, text: response.text });
     } catch (error) {
-      this.logger.error('Claude processing error', { error, message });
+      this.logger.error('Z.ai processing error', { error, message });
 
       // Send error message to user
       const errorMessage = this.formatErrorMessage(error);
@@ -331,6 +334,46 @@ export class TelegramBot {
       return `❌ Fout: ${err.message || 'Onbekende fout'}`;
     }
     return '❌ Er is een fout opgetreden.';
+  }
+
+  /**
+   * Setup bot commands (for / menu in Telegram)
+   */
+  private async setupCommands(): Promise<void> {
+    try {
+      await this.api.setupCommands([
+        // Claude Commands
+        { command: 'start', description: 'Start de bot' },
+        { command: 'help', description: 'Help overzicht' },
+        { command: 'claude_status', description: 'Claude status' },
+        { command: 'claude_clear', description: 'Wis Claude geschiedenis' },
+        // Notes
+        { command: 'note', description: '📝 Notities beheren' },
+        // Reminders
+        { command: 'remind', description: '⏰ Herinneringen' },
+        // Translation
+        { command: 'tr', description: '🌐 Vertaal tekst' },
+        // Links
+        { command: 'link', description: '🔗 Link shortener' },
+        // Analytics
+        { command: 'stats', description: '📊 Bot statistieken' },
+        // Search
+        { command: 'search', description: '🔍 Zoeken' },
+        // Games
+        { command: 'trivia', description: '🎮 Trivia spel' },
+        { command: 'ttt', description: '🎮 Tic Tac Toe' },
+        // Files
+        { command: 'file', description: '📎 Bestanden' },
+        // Groups
+        { command: 'group', description: '👥 Groepen' },
+        // System
+        { command: 'status', description: 'Bot status' },
+      ], 'all_private_chats');
+      this.logger.info('Bot commands registered');
+    } catch (error) {
+      this.logger.warn('Failed to register bot commands', { error });
+      // Don't fail the bot start if commands setup fails
+    }
   }
 
   // ==========================================================================
@@ -370,8 +413,8 @@ export class TelegramBot {
     return this.sessionManager;
   }
 
-  get claudeServiceInstance(): ClaudeService | undefined {
-    return this.claudeService;
+  get zaiServiceInstance(): ZAIService | undefined {
+    return this.zaiService;
   }
 
   get isRunning(): boolean {

@@ -24,7 +24,63 @@ import {
   claudeStatusCommand,
   claudeHelpCommand,
 } from './bot/commands/claude';
-import { ClaudeService } from './claude';
+import { ZAIService } from './zai';
+
+// Features imports
+import { ReminderService, setReminderService } from './features/reminders';
+import { setClaudeService as setSearchClaudeService } from './features/search';
+import { trackMessage, trackCommand, trackError } from './features/analytics';
+
+// Notes
+import {
+  noteListCommand,
+  noteAddCommand,
+  noteGetCommand,
+  noteDeleteCommand,
+  noteSearchCommand,
+  noteTagCommand,
+} from './features/notes';
+
+// Reminders
+import {
+  remindAddCommand,
+  remindListCommand,
+  remindDeleteCommand,
+} from './features/reminders';
+
+// Translation
+import { translateCommand, translateListCommand } from './features/translate';
+
+// Links
+import {
+  linkShortenCommand,
+  linkListCommand,
+  linkDeleteCommand,
+  linkPreviewCommand,
+} from './features/links';
+
+// Analytics
+import { statsCommand, statsResetCommand } from './features/analytics';
+
+// Search
+import { searchCommand } from './features/search';
+
+// Games
+import { triviaCommand, triviaAnswerCommand, tttCommand, tttMoveCommand } from './features/games';
+
+// Files
+import { fileListCommand, fileDeleteCommand } from './features/files';
+
+// Groups
+import {
+  groupCreateCommand,
+  groupListCommand,
+  groupJoinCommand,
+  groupLeaveCommand,
+  groupPostCommand,
+  groupReadCommand,
+  groupDiscoverCommand,
+} from './features/groups';
 
 // =============================================================================
 // Plugin Interface
@@ -56,7 +112,8 @@ class Plugin implements ITelegramBotPlugin {
   private eventDispatcher: EventDispatcher;
   private logger: Logger;
   private config: PluginConfig;
-  private claudeService?: ClaudeService;
+  private zaiService?: ZAIService;
+  private reminderService?: ReminderService;
 
   constructor(config: PluginConfig) {
     this.config = config;
@@ -66,23 +123,30 @@ class Plugin implements ITelegramBotPlugin {
       format: config.options?.logging?.format,
     });
 
-    // Create Claude service if API key is available
-    if (config.anthropicApiKey) {
-      this.claudeService = new ClaudeService({
-        apiKey: config.anthropicApiKey,
-        model: config.options?.claude?.model,
+    // Create Z.ai service if API key is available
+    if (config.zaiApiKey) {
+      this.zaiService = new ZAIService({
+        apiKey: config.zaiApiKey,
+        model: config.options?.claude?.model || 'glm-4.7',
         maxTokens: config.options?.claude?.maxTokens,
         temperature: config.options?.claude?.temperature,
       });
-      this.logger.info('Claude service initialized');
+      this.logger.info('Z.ai service initialized');
+
+      // Set for search feature
+      setSearchClaudeService(this.zaiService as any); // Type compatibility
     }
 
     // Create bot
     this.bot = createBot({
       token: config.botToken,
       options: config.options,
-      claudeService: this.claudeService,
+      zaiService: this.zaiService,
     });
+
+    // Create reminder service
+    this.reminderService = new ReminderService(this.bot.apiMethods);
+    setReminderService(this.reminderService);
 
     // Create event dispatcher
     this.eventDispatcher = createEventDispatcher();
@@ -94,7 +158,7 @@ class Plugin implements ITelegramBotPlugin {
     registerDefaultHandlers(
       this.eventDispatcher,
       this.bot.apiMethods,
-      { defaultChatId: undefined } // Will be set per user
+      { defaultChatId: undefined }
     );
 
     this.logger.info('Plugin initialized');
@@ -109,6 +173,11 @@ class Plugin implements ITelegramBotPlugin {
       payload: { timestamp: new Date() },
       timestamp: new Date(),
     });
+
+    // Start reminder service
+    if (this.reminderService) {
+      this.reminderService.start();
+    }
 
     // Start bot
     await this.bot.start();
@@ -126,12 +195,17 @@ class Plugin implements ITelegramBotPlugin {
       timestamp: new Date(),
     });
 
+    // Stop reminder service
+    if (this.reminderService) {
+      this.reminderService.stop();
+    }
+
     // Stop bot
     await this.bot.stop();
 
-    // Destroy Claude service
-    if (this.claudeService) {
-      this.claudeService.destroy();
+    // Destroy Z.ai service
+    if (this.zaiService) {
+      this.zaiService.destroy();
     }
 
     // Clear event handlers
@@ -162,23 +236,38 @@ class Plugin implements ITelegramBotPlugin {
     // Setup command handler
     const commandHandler = createCommandHandler(api);
 
-    // Register Claude commands
+    // ==========================================================================
+    // Claude Commands
+    // ==========================================================================
+
     commandHandler.registerCommand('/start', async (message, _args) => {
+      trackCommand('/start', String(message.chat.id));
       await claudeStartCommand(api, message);
     });
 
-    commandHandler.registerCommand('/claude-status', async (message, _args) => {
-      const service = this.bot.claudeServiceInstance;
+    commandHandler.registerCommand('/help', async (message, _args) => {
+      trackCommand('/help', String(message.chat.id));
+      await claudeHelpCommand(api, message);
+    });
+
+    commandHandler.registerCommand('/claude_status', async (message, _args) => {
+      trackCommand('/claude-status', String(message.chat.id));
+      const service = this.bot.zaiServiceInstance;
       if (service) {
-        const info = service.getConversationInfo(String(message.chat.id));
+        const zaiInfo = service.getConversationInfo(String(message.chat.id));
+        const info = zaiInfo ? {
+          messageCount: zaiInfo.messageCount,
+          lastActivity: new Date(zaiInfo.lastAccessAt),
+        } : null;
         await claudeStatusCommand(api, message, info);
       } else {
-        await api.sendMessage({ chat_id: message.chat.id, text: '⚠️ Claude service is niet geconfigureerd.' });
+        await api.sendMessage({ chat_id: message.chat.id, text: '⚠️ Z.ai service is niet geconfigureerd.' });
       }
     });
 
-    commandHandler.registerCommand('/claude-clear', async (message, _args) => {
-      const service = this.bot.claudeServiceInstance;
+    commandHandler.registerCommand('/claude_clear', async (message, _args) => {
+      trackCommand('/claude-clear', String(message.chat.id));
+      const service = this.bot.zaiServiceInstance;
       if (service) {
         service.clearConversation(String(message.chat.id));
         await api.sendMessage({ chat_id: message.chat.id, text: '✅ Gespreksgeschiedenis gewist.' });
@@ -187,12 +276,197 @@ class Plugin implements ITelegramBotPlugin {
       }
     });
 
-    commandHandler.registerCommand('/help', async (message, _args) => {
-      await claudeHelpCommand(api, message);
+    // ==========================================================================
+    // Notes Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/note', async (message, args) => {
+      trackCommand('/note', String(message.chat.id));
+      const action = args[0];
+      if (action === 'list') {
+        await noteListCommand(api, message);
+      } else if (action === 'add') {
+        await noteAddCommand(api, message, args.slice(1));
+      } else if (action === 'get') {
+        await noteGetCommand(api, message, args.slice(1));
+      } else if (action === 'delete') {
+        await noteDeleteCommand(api, message, args.slice(1));
+      } else if (action === 'search') {
+        await noteSearchCommand(api, message, args.slice(1));
+      } else if (action === 'tag') {
+        await noteTagCommand(api, message, args.slice(1));
+      } else {
+        await api.sendMessage({
+          chat_id: message.chat.id,
+          text: '📝 Notities commando\'s:\n/note list - Toon alle notities\n/note add <tekst> - Voeg notitie toe\n/note get <nummer> - Lees notitie\n/note delete <nummer> - Verwijder notitie\n/note search <term> - Zoek in notities\n/note tag <nummer> <tag> - Voeg tag toe',
+        });
+      }
     });
 
-    // Regular commands
+    // ==========================================================================
+    // Reminders Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/remind', async (message, args) => {
+      trackCommand('/remind', String(message.chat.id));
+      const action = args[0];
+      if (action === 'list') {
+        await remindListCommand(api, message);
+      } else if (action === 'add' || action === 'in' || action === 'at') {
+        await remindAddCommand(api, message, args);
+      } else if (action === 'delete') {
+        await remindDeleteCommand(api, message, args.slice(1));
+      } else {
+        await api.sendMessage({
+          chat_id: message.chat.id,
+          text: '⏰ Herinneringen:\n/remind in <tijd> <bericht> - Herinnering in X tijd\n/remind at <tijd> <bericht> - Herinnering op tijd\n/remind list - Toon herinneringen\n/remind delete <nummer> - Verwijder herinnering\n\nTijd formaten: 5m, 1h, 2d of 14:30',
+        });
+      }
+    });
+
+    // ==========================================================================
+    // Translation Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/tr', async (message, args) => {
+      trackCommand('/tr', String(message.chat.id));
+      await translateCommand(api, message, args);
+    });
+
+    commandHandler.registerCommand('/translate', async (message, args) => {
+      trackCommand('/translate', String(message.chat.id));
+      await translateCommand(api, message, args);
+    });
+
+    commandHandler.registerCommand('/tr-list', async (message, _args) => {
+      trackCommand('/tr-list', String(message.chat.id));
+      await translateListCommand(api, message);
+    });
+
+    // ==========================================================================
+    // Links Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/link', async (message, args) => {
+      trackCommand('/link', String(message.chat.id));
+      const action = args[0];
+      if (action === 'shorten') {
+        await linkShortenCommand(api, message, args.slice(1));
+      } else if (action === 'list') {
+        await linkListCommand(api, message);
+      } else if (action === 'delete') {
+        await linkDeleteCommand(api, message, args.slice(1));
+      } else if (action === 'preview') {
+        await linkPreviewCommand(api, message, args.slice(1));
+      } else {
+        await api.sendMessage({
+          chat_id: message.chat.id,
+          text: '🔗 Links:\n/link shorten <url> - Maak korte link\n/link list - Toon links\n/link delete <code> - Verwijder link\n/link preview <url> - Link preview',
+        });
+      }
+    });
+
+    // ==========================================================================
+    // Analytics Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/stats', async (message, _args) => {
+      trackCommand('/stats', String(message.chat.id));
+      await statsCommand(api, message);
+    });
+
+    commandHandler.registerCommand('/stats-reset', async (message, _args) => {
+      trackCommand('/stats-reset', String(message.chat.id));
+      await statsResetCommand(api, message);
+    });
+
+    // ==========================================================================
+    // Search Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/search', async (message, args) => {
+      trackCommand('/search', String(message.chat.id));
+      await searchCommand(api, message, args);
+    });
+
+    // ==========================================================================
+    // Games Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/trivia', async (message, _args) => {
+      trackCommand('/trivia', String(message.chat.id));
+      await triviaCommand(api, message);
+    });
+
+    commandHandler.registerCommand('/trivia-answer', async (message, args) => {
+      trackCommand('/trivia-answer', String(message.chat.id));
+      await triviaAnswerCommand(api, message, args);
+    });
+
+    commandHandler.registerCommand('/ttt', async (message, _args) => {
+      trackCommand('/ttt', String(message.chat.id));
+      await tttCommand(api, message);
+    });
+
+    commandHandler.registerCommand('/ttt-move', async (message, args) => {
+      trackCommand('/ttt-move', String(message.chat.id));
+      await tttMoveCommand(api, message, args);
+    });
+
+    // ==========================================================================
+    // Files Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/file', async (message, args) => {
+      trackCommand('/file', String(message.chat.id));
+      const action = args[0];
+      if (action === 'list') {
+        await fileListCommand(api, message);
+      } else if (action === 'delete') {
+        await fileDeleteCommand(api, message, args.slice(1));
+      } else {
+        await api.sendMessage({
+          chat_id: message.chat.id,
+          text: '📎 Bestanden:\n/file list - Toon bestanden\n/file delete <id> - Verwijder bestand\n\nStuur een bestand naar de chat om op te slaan.',
+        });
+      }
+    });
+
+    // ==========================================================================
+    // Groups Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/group', async (message, args) => {
+      trackCommand('/group', String(message.chat.id));
+      const action = args[0];
+      if (action === 'create') {
+        await groupCreateCommand(api, message, args.slice(1));
+      } else if (action === 'list') {
+        await groupListCommand(api, message);
+      } else if (action === 'join') {
+        await groupJoinCommand(api, message, args.slice(1));
+      } else if (action === 'leave') {
+        await groupLeaveCommand(api, message, args.slice(1));
+      } else if (action === 'post') {
+        await groupPostCommand(api, message, args.slice(1));
+      } else if (action === 'read') {
+        await groupReadCommand(api, message, args.slice(1));
+      } else if (action === 'discover') {
+        await groupDiscoverCommand(api, message);
+      } else {
+        await api.sendMessage({
+          chat_id: message.chat.id,
+          text: '👥 Groepen:\n/group create <naam> - Maak groep\n/group list - Jouw groepen\n/group join <id> - Join groep\n/group leave <id> - Verlaat groep\n/group post <id>|<tekst>|[anon] - Plaats bericht\n/group read <id> [aantal] - Lees berichten\n/group discover - Ontdek groepen',
+        });
+      }
+    });
+
+    // ==========================================================================
+    // System Commands
+    // ==========================================================================
+
     commandHandler.registerCommand('/status', async (message, _args) => {
+      trackCommand('/status', String(message.chat.id));
       await statusCommand(api, message, {
         isRunning: this.bot.isRunning,
         isPolling: this.bot.isPolling,
@@ -200,22 +474,24 @@ class Plugin implements ITelegramBotPlugin {
       });
     });
 
-    // TODO: Register agent commands when agent system is implemented
-    // commandHandler.registerCommand('/agent', async (message, args) => {
-    //   await agentCommand(api, message, args);
-    // });
-
     // Setup callback handler
     const callbackHandler = createCallbackHandler(api);
 
     // Register agent callbacks
     registerAgentCallbacks(callbackHandler);
 
-    // Setup message handler (simple echo for now)
+    // Setup message handler
     const messageHandler = new SimpleMessageHandler(api, async (message) => {
+      trackMessage(String(message.chat.id));
+
       if (message.text && !message.text.startsWith('/')) {
-        // Echo non-command messages
-        await api.sendText(message.chat.id, `Echo: ${message.text}`);
+        // Non-command messages go to Z.ai
+        if (this.bot.zaiServiceInstance) {
+          // Let the bot handle it (already in bot.ts)
+          return;
+        }
+        // Fallback echo if no Claude
+        await api.sendMessage({ chat_id: message.chat.id, text: `Echo: ${message.text}` });
       }
     });
 
@@ -279,7 +555,7 @@ export async function createPluginFromFile(
 // Default export for OpenCode plugin system
 export default {
   name: 'telegram-bot-plugin',
-  version: '1.0.0',
+  version: '2.0.0',
   create: createPluginFromEnv,
 };
 
