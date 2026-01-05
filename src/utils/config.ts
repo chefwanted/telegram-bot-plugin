@@ -31,6 +31,7 @@ export function validateConfig(config: Partial<PluginConfig>): config is PluginC
 export function loadConfig(): Partial<PluginConfig> {
   const config: Partial<PluginConfig> = {
     botToken: process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN,
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     options: loadOptions(),
   };
 
@@ -76,6 +77,16 @@ export function loadOptions(): PluginOptions | undefined {
     options.logging = {
       level: (process.env.LOG_LEVEL as any) || 'info',
       format: (process.env.LOG_FORMAT as any) || 'text',
+    };
+  }
+
+  // Claude options
+  if (process.env.CLAUDE_MODEL || process.env.CLAUDE_MAX_TOKENS) {
+    options.claude = {
+      model: process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-20241022',
+      maxTokens: parseInt(process.env.CLAUDE_MAX_TOKENS || '4096', 10),
+      temperature: parseFloat(process.env.CLAUDE_TEMPERATURE || '0.7'),
+      maxHistoryMessages: parseInt(process.env.CLAUDE_MAX_HISTORY || '50', 10),
     };
   }
 
@@ -168,6 +179,7 @@ export function mergeConfig(
         api: { ...merged.options?.api, ...config.options?.api },
         logging: { ...merged.options?.logging, ...config.options?.logging },
         webhook: { ...merged.options?.webhook, ...config.options?.webhook } as any,
+        claude: { ...merged.options?.claude, ...config.options?.claude },
       },
     } as Partial<PluginConfig>;
   }, {} as Partial<PluginConfig>);

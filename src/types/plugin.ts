@@ -10,6 +10,8 @@
 export interface PluginConfig {
   /** Telegram Bot token */
   botToken: string;
+  /** Anthropic API key for Claude integration */
+  anthropicApiKey?: string;
   /** Plugin opties */
   options?: PluginOptions;
 }
@@ -25,6 +27,23 @@ export interface PluginOptions {
   logging?: LoggingOptions;
   /** Webhook opties (alternatief voor polling) */
   webhook?: WebhookOptions;
+  /** Claude AI opties */
+  claude?: ClaudeOptions;
+}
+
+// =============================================================================
+// Claude Options
+// =============================================================================
+
+export interface ClaudeOptions {
+  /** Model to use (default: claude-3-5-sonnet-20241022) */
+  model?: string;
+  /** Maximum tokens in response (default: 4096) */
+  maxTokens?: number;
+  /** Temperature for randomness (default: 0.7) */
+  temperature?: number;
+  /** Maximum history messages per conversation (default: 50) */
+  maxHistoryMessages?: number;
 }
 
 // =============================================================================

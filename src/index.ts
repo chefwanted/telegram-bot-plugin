@@ -22,9 +22,9 @@ import {
 import {
   claudeStartCommand,
   claudeStatusCommand,
-  claudeClearCommand,
   claudeHelpCommand,
 } from './bot/commands/claude';
+import { ClaudeService } from './claude';
 
 // =============================================================================
 // Plugin Interface
@@ -56,6 +56,7 @@ class Plugin implements ITelegramBotPlugin {
   private eventDispatcher: EventDispatcher;
   private logger: Logger;
   private config: PluginConfig;
+  private claudeService?: ClaudeService;
 
   constructor(config: PluginConfig) {
     this.config = config;
@@ -65,10 +66,22 @@ class Plugin implements ITelegramBotPlugin {
       format: config.options?.logging?.format,
     });
 
+    // Create Claude service if API key is available
+    if (config.anthropicApiKey) {
+      this.claudeService = new ClaudeService({
+        apiKey: config.anthropicApiKey,
+        model: config.options?.claude?.model,
+        maxTokens: config.options?.claude?.maxTokens,
+        temperature: config.options?.claude?.temperature,
+      });
+      this.logger.info('Claude service initialized');
+    }
+
     // Create bot
     this.bot = createBot({
       token: config.botToken,
       options: config.options,
+      claudeService: this.claudeService,
     });
 
     // Create event dispatcher
@@ -116,6 +129,11 @@ class Plugin implements ITelegramBotPlugin {
     // Stop bot
     await this.bot.stop();
 
+    // Destroy Claude service
+    if (this.claudeService) {
+      this.claudeService.destroy();
+    }
+
     // Clear event handlers
     this.eventDispatcher.clear();
 
@@ -150,16 +168,22 @@ class Plugin implements ITelegramBotPlugin {
     });
 
     commandHandler.registerCommand('/claude-status', async (message, _args) => {
-      const bridge = this.bot.claudeBridgeInstance;
-      if (bridge) {
-        await claudeStatusCommand(api, message, bridge);
+      const service = this.bot.claudeServiceInstance;
+      if (service) {
+        const info = service.getConversationInfo(String(message.chat.id));
+        await claudeStatusCommand(api, message, info);
+      } else {
+        await api.sendMessage({ chat_id: message.chat.id, text: '⚠️ Claude service is niet geconfigureerd.' });
       }
     });
 
     commandHandler.registerCommand('/claude-clear', async (message, _args) => {
-      const bridge = this.bot.claudeBridgeInstance;
-      if (bridge) {
-        await claudeClearCommand(api, message, bridge);
+      const service = this.bot.claudeServiceInstance;
+      if (service) {
+        service.clearConversation(String(message.chat.id));
+        await api.sendMessage({ chat_id: message.chat.id, text: '✅ Gespreksgeschiedenis gewist.' });
+      } else {
+        await api.sendMessage({ chat_id: message.chat.id, text: '⚠️ Claude service is niet geconfigureerd.' });
       }
     });
 

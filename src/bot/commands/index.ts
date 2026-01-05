@@ -24,6 +24,6 @@ export {
 export {
   claudeStartCommand,
   claudeStatusCommand,
-  claudeClearCommand,
   claudeHelpCommand,
+  ConversationInfo,
 } from './claude';

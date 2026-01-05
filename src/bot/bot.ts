@@ -12,7 +12,7 @@ import { createLogger } from '../utils/logger';
 import type { MessageHandler } from './handlers/message';
 import type { CommandHandler } from './handlers/command';
 import type { CallbackHandler } from './handlers/callback';
-import { createClaudeBridge, type ClaudeBridge } from '../bridge/claude';
+import type { ClaudeService } from '../claude';
 
 // =============================================================================
 // Bot Options
@@ -23,6 +23,8 @@ export interface BotOptions {
   token: string;
   /** Plugin options */
   options?: PluginOptions;
+  /** Claude service for AI responses */
+  claudeService?: ClaudeService;
 }
 
 // =============================================================================
@@ -49,7 +51,7 @@ export class TelegramBot {
   private client: ApiClient;
   private api: ApiMethods;
   private sessionManager: SessionManager;
-  private claudeBridge?: ClaudeBridge;
+  private claudeService?: ClaudeService;
   private logger = createLogger({ prefix: 'Bot' });
 
   private state: BotStateInternal = {
@@ -80,8 +82,8 @@ export class TelegramBot {
       options.options?.session
     );
 
-    // Create Claude bridge
-    this.claudeBridge = createClaudeBridge(this.api);
+    // Store Claude service
+    this.claudeService = options.claudeService;
 
     this.logger.info('Bot initialized');
   }
@@ -105,12 +107,6 @@ export class TelegramBot {
       // Verify bot token
       const me = await this.api.getMe();
       this.logger.info(`Started bot: @${me.username}`);
-
-      // Start Claude bridge processing
-      if (this.claudeBridge) {
-        this.claudeBridge.startProcessing();
-        this.logger.info('Claude bridge started');
-      }
 
       // Start polling
       if (!this.options?.webhook) {
@@ -140,6 +136,11 @@ export class TelegramBot {
     }
 
     this.state.isPolling = false;
+
+    // Cleanup Claude service
+    if (this.claudeService) {
+      this.claudeService.destroy();
+    }
 
     // Cleanup session manager
     this.sessionManager.destroy();
@@ -271,9 +272,9 @@ export class TelegramBot {
       await this.messageHandler.handle(message);
     }
 
-    // Also send to Claude bridge if not a command
-    if (this.claudeBridge && message.text && !message.text.startsWith('/')) {
-      await this.claudeBridge.processTelegramMessage(message);
+    // Also send to Claude service if not a command
+    if (this.claudeService && message.text && !message.text.startsWith('/')) {
+      await this.processWithClaude(message);
     }
   }
 
@@ -284,6 +285,52 @@ export class TelegramBot {
     if (this.callbackHandler) {
       await this.callbackHandler.handle(callbackQuery);
     }
+  }
+
+  /**
+   * Verwerk bericht met Claude
+   */
+  private async processWithClaude(message: Message): Promise<void> {
+    if (!message.text || !message.chat) {
+      return;
+    }
+
+    try {
+      const response = await this.claudeService!.processMessage(
+        String(message.chat.id),
+        message.text
+      );
+
+      // Send response to Telegram
+      await this.api.sendMessage({ chat_id: message.chat.id, text: response.text });
+    } catch (error) {
+      this.logger.error('Claude processing error', { error, message });
+
+      // Send error message to user
+      const errorMessage = this.formatErrorMessage(error);
+      try {
+        await this.api.sendMessage({ chat_id: message.chat.id, text: errorMessage });
+      } catch {
+        // Ignore send errors
+      }
+    }
+  }
+
+  /**
+   * Format error message for user
+   */
+  private formatErrorMessage(error: unknown): string {
+    if (error && typeof error === 'object' && 'message' in error) {
+      const err = error as { message?: string; code?: string };
+      if (err.code === 'RATE_LIMIT') {
+        return '⚠️ Rate limit bereikt. Probeer het later opnieuw.';
+      }
+      if (err.code === 'CONTENT_FILTER') {
+        return '⚠️ Bericht geweigerd door content filter.';
+      }
+      return `❌ Fout: ${err.message || 'Onbekende fout'}`;
+    }
+    return '❌ Er is een fout opgetreden.';
   }
 
   // ==========================================================================
@@ -323,8 +370,8 @@ export class TelegramBot {
     return this.sessionManager;
   }
 
-  get claudeBridgeInstance(): ClaudeBridge | undefined {
-    return this.claudeBridge;
+  get claudeServiceInstance(): ClaudeService | undefined {
+    return this.claudeService;
   }
 
   get isRunning(): boolean {
