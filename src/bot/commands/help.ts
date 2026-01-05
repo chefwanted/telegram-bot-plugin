@@ -145,4 +145,5 @@ export const DEFAULT_COMMANDS: Record<string, string> = {
   '/skills': 'Skills XP',
   '/leaderboard': 'Leaderboard',
   '/tool': 'Custom tools',
+  '/logs': 'Bot logs bekijken',
 };

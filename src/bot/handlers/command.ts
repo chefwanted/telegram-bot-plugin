@@ -6,6 +6,7 @@
 import type { Message } from '../../types/telegram';
 import type { ApiMethods } from '../../api';
 import { createLogger } from '../../utils/logger';
+import { telegramLogger } from '../../utils/telegram-logger';
 
 // =============================================================================
 // Command Handler Interface
@@ -59,6 +60,9 @@ export class BotCommandHandler implements CommandHandler {
     }
 
     const { command, args } = this.parseCommand(message.text);
+
+    // Log all commands
+    telegramLogger.logCommand(message, command, args);
 
     this.logger.debug('Command received', { command, args });
 

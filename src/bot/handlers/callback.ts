@@ -6,6 +6,7 @@
 import type { CallbackQuery } from '../../types/telegram';
 import type { ApiMethods } from '../../api';
 import { createLogger } from '../../utils/logger';
+import { telegramLogger } from '../../utils/telegram-logger';
 
 // =============================================================================
 // Callback Handler Interface
@@ -57,6 +58,9 @@ export class BotCallbackHandler implements CallbackHandler {
    */
   async handle(callbackQuery: CallbackQuery): Promise<void> {
     const data = callbackQuery.data;
+
+    // Log all callback queries
+    telegramLogger.logCallbackQuery(callbackQuery);
 
     if (!data) {
       await this.answerCallback(callbackQuery, 'Geen data');

@@ -17,6 +17,7 @@ import { getConfirmationManager } from './streaming/confirmation';
 import { helpCommand, DEFAULT_COMMANDS, startCommand } from './bot/commands';
 import { statusCommand } from './bot/commands/status';
 import { registerAgentCallbacks } from './bot/commands/agent';
+import { telegramLogger, LogLevel } from './utils/telegram-logger';
 import { ZAIService } from './zai';
 import { closeDatabase } from './database';
 
@@ -96,6 +97,9 @@ import { customToolCommand } from './features/custom-tools';
 
 // CLI Commands
 import { claudeCliCommand, omoCommand } from './bot/commands/cli';
+
+// Logs Command
+import { logsCommand } from './bot/commands/logs';
 
 // Version & update info
 import { formatVersionMessage, formatUpdateMessage, formatChangelogMessage } from './utils/version';
@@ -598,6 +602,15 @@ class Plugin implements ITelegramBotPlugin {
     commandHandler.registerCommand('/omo', async (message, args) => {
       trackCommand('/omo', String(message.chat.id));
       await omoCommand(api, message, args);
+    });
+
+    // ==========================================================================
+    // Logs Command
+    // ==========================================================================
+
+    commandHandler.registerCommand('/logs', async (message, args) => {
+      trackCommand('/logs', String(message.chat.id));
+      await logsCommand(api, message, args);
     });
 
     // ==========================================================================

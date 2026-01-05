@@ -5,6 +5,7 @@
 
 import type { Message } from '../../types/telegram';
 import type { ApiMethods } from '../../api';
+import { telegramLogger } from '../../utils/telegram-logger';
 
 // =============================================================================
 // Message Handler Interface
@@ -29,6 +30,11 @@ export class BaseMessageHandler implements MessageHandler {
 
   async handle(message: Message): Promise<void> {
     this.logger.debug('Handling message', { messageId: message.message_id });
+
+    // Log all incoming messages
+    if (message.text) {
+      telegramLogger.logMessage(message, message.text);
+    }
 
     // Get or create session
     const session = await this.getSession(message);
