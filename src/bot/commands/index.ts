@@ -1,0 +1,21 @@
+/**
+ * Commands Module Barrel Export
+ * Exporteert alle commando functionaliteit
+ */
+
+// Help Command
+export { helpCommand, DEFAULT_COMMANDS } from './help';
+
+// Start Command
+export { startCommand } from './start';
+
+// Status Command
+export { statusCommand } from './status';
+
+// Agent Commands
+export {
+  agentListCommand,
+  agentCallCommand,
+  registerAgentCallbacks,
+  forwardToAgent,
+} from './agent';
