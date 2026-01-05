@@ -20,6 +20,69 @@ if (!fs.existsSync(DB_DIR)) {
 }
 
 // =============================================================================
+// Data Types
+// =============================================================================
+
+export interface Note {
+  id: number;
+  chat_id: string;
+  content: string;
+  tags: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface Reminder {
+  id: number;
+  chat_id: string;
+  message: string;
+  remind_at: number;
+  recurring: string | null;
+  created_at: number;
+}
+
+export interface AnalyticsEvent {
+  id: number;
+  chat_id: string | null;
+  event_type: string;
+  timestamp: number;
+}
+
+export interface Conversation {
+  chat_id: string;
+  messages: string | null;
+  created_at: number;
+  last_access_at: number;
+}
+
+export interface FileRecord {
+  id: number;
+  chat_id: string;
+  file_id: string;
+  file_name: string;
+  file_size: number | null;
+  mime_type: string | null;
+  folder: string | null;
+  created_at: number;
+}
+
+export interface UserSkillRecord {
+  chat_id: string;
+  skill_id: string;
+  level: number;
+  xp: number;
+  updated_at: number;
+}
+
+export interface P2000Subscription {
+  chat_id: string;
+  enabled: number;
+  regions: string | null;
+  filters: string | null;
+  created_at: number;
+}
+
+// =============================================================================
 // Database Client Class
 // =============================================================================
 
@@ -154,16 +217,16 @@ export class DatabaseClient {
     return result.lastInsertRowid as number;
   }
 
-  getNotes(chatId: string): any[] {
+  getNotes(chatId: string): Note[] {
     return this.database.prepare(`
       SELECT * FROM notes WHERE chat_id = ? ORDER BY created_at DESC
-    `).all(chatId);
+    `).all(chatId) as Note[];
   }
 
-  getNote(id: number, chatId: string): any | undefined {
+  getNote(id: number, chatId: string): Note | undefined {
     return this.database.prepare(`
       SELECT * FROM notes WHERE id = ? AND chat_id = ?
-    `).get(id, chatId);
+    `).get(id, chatId) as Note | undefined;
   }
 
   deleteNote(id: number, chatId: string): boolean {
@@ -174,11 +237,11 @@ export class DatabaseClient {
     return result.changes > 0;
   }
 
-  searchNotes(chatId: string, term: string): any[] {
+  searchNotes(chatId: string, term: string): Note[] {
     return this.database.prepare(`
       SELECT * FROM notes WHERE chat_id = ? AND content LIKE ?
       ORDER BY created_at DESC
-    `).all(chatId, `%${term}%`);
+    `).all(chatId, `%${term}%`) as Note[];
   }
 
   // ==========================================================================
@@ -195,16 +258,16 @@ export class DatabaseClient {
     return result.lastInsertRowid as number;
   }
 
-  getReminders(chatId: string): any[] {
+  getReminders(chatId: string): Reminder[] {
     return this.database.prepare(`
       SELECT * FROM reminders WHERE chat_id = ? ORDER BY remind_at ASC
-    `).all(chatId);
+    `).all(chatId) as Reminder[];
   }
 
-  getPendingReminders(now: number = Date.now()): any[] {
+  getPendingReminders(now: number = Date.now()): Reminder[] {
     return this.database.prepare(`
       SELECT * FROM reminders WHERE remind_at <= ? ORDER BY remind_at ASC
-    `).all(now);
+    `).all(now) as Reminder[];
   }
 
   deleteReminder(id: number): boolean {
@@ -231,15 +294,15 @@ export class DatabaseClient {
     `).run(chatId, eventType, now);
   }
 
-  getAnalytics(chatId?: string): any[] {
+  getAnalytics(chatId?: string): AnalyticsEvent[] {
     if (chatId) {
       return this.database.prepare(`
         SELECT * FROM analytics WHERE chat_id = ? ORDER BY timestamp DESC LIMIT 100
-      `).all(chatId);
+      `).all(chatId) as AnalyticsEvent[];
     }
     return this.database.prepare(`
       SELECT * FROM analytics ORDER BY timestamp DESC LIMIT 100
-    `).all();
+    `).all() as AnalyticsEvent[];
   }
 
   getStats(): { [key: string]: number } {
@@ -277,8 +340,8 @@ export class DatabaseClient {
     }
   }
 
-  getConversation(chatId: string): any | undefined {
-    return this.database.prepare(`SELECT * FROM conversations WHERE chat_id = ?`).get(chatId);
+  getConversation(chatId: string): Conversation | undefined {
+    return this.database.prepare(`SELECT * FROM conversations WHERE chat_id = ?`).get(chatId) as Conversation | undefined;
   }
 
   deleteConversation(chatId: string): void {
@@ -299,15 +362,15 @@ export class DatabaseClient {
     return result.lastInsertRowid as number;
   }
 
-  getFiles(chatId: string, folder?: string): any[] {
+  getFiles(chatId: string, folder?: string): FileRecord[] {
     if (folder) {
       return this.database.prepare(`
         SELECT * FROM files WHERE chat_id = ? AND folder = ? ORDER BY created_at DESC
-      `).all(chatId, folder);
+      `).all(chatId, folder) as FileRecord[];
     }
     return this.database.prepare(`
       SELECT * FROM files WHERE chat_id = ? ORDER BY created_at DESC
-    `).all(chatId);
+    `).all(chatId) as FileRecord[];
   }
 
   deleteFile(id: number, chatId: string): boolean {
@@ -325,7 +388,7 @@ export class DatabaseClient {
     const now = Date.now();
     const existing = this.database.prepare(`
       SELECT * FROM user_skills WHERE chat_id = ? AND skill_id = ?
-    `).get(chatId, skillId) as any;
+    `).get(chatId, skillId) as UserSkillRecord | undefined;
 
     if (existing) {
       const newXp = existing.xp + amount;
@@ -343,23 +406,23 @@ export class DatabaseClient {
     }
   }
 
-  getSkills(chatId: string): any[] {
+  getSkills(chatId: string): UserSkillRecord[] {
     return this.database.prepare(`
       SELECT * FROM user_skills WHERE chat_id = ? ORDER BY xp DESC
-    `).all(chatId);
+    `).all(chatId) as UserSkillRecord[];
   }
 
-  getLeaderboard(skillId?: string, limit: number = 10): any[] {
+  getLeaderboard(skillId?: string, limit: number = 10): UserSkillRecord[] {
     if (skillId) {
       return this.database.prepare(`
         SELECT chat_id, skill_id, level, xp FROM user_skills
         WHERE skill_id = ? ORDER BY xp DESC LIMIT ?
-      `).all(skillId, limit);
+      `).all(skillId, limit) as UserSkillRecord[];
     }
     return this.database.prepare(`
       SELECT chat_id, skill_id, level, xp FROM user_skills
       ORDER BY xp DESC LIMIT ?
-    `).all(limit);
+    `).all(limit) as UserSkillRecord[];
   }
 
   // ==========================================================================
@@ -368,7 +431,7 @@ export class DatabaseClient {
 
   subscribeP2000(chatId: string, regions?: string[], filters?: string[]): void {
     const now = Date.now();
-    const existing = this.database.prepare(`SELECT * FROM p2000_subscriptions WHERE chat_id = ?`).get(chatId) as any;
+    const existing = this.database.prepare(`SELECT * FROM p2000_subscriptions WHERE chatId = ?`).get(chatId) as P2000Subscription | undefined;
 
     if (existing) {
       this.database.prepare(`
@@ -386,8 +449,8 @@ export class DatabaseClient {
     this.database.prepare(`DELETE FROM p2000_subscriptions WHERE chat_id = ?`).run(chatId);
   }
 
-  getP2000Subscriptions(): any[] {
-    return this.database.prepare(`SELECT * FROM p2000_subscriptions WHERE enabled = 1`).all();
+  getP2000Subscriptions(): P2000Subscription[] {
+    return this.database.prepare(`SELECT * FROM p2000_subscriptions WHERE enabled = 1`).all() as P2000Subscription[];
   }
 
   // ==========================================================================
@@ -425,4 +488,63 @@ export function closeDatabase(): void {
     clientInstance.close();
     clientInstance = null;
   }
+}
+
+// =============================================================================
+// Type Mappers
+// =============================================================================
+
+import type { UserSkill } from '../features/skills/types';
+import type { LeaderboardEntry } from '../features/skills/types';
+
+/**
+ * Convert database UserSkillRecord to domain UserSkill
+ */
+export function toUserSkill(record: UserSkillRecord): UserSkill {
+  return {
+    chatId: record.chat_id,
+    skillId: record.skill_id,
+    level: record.level,
+    xp: record.xp,
+    updatedAt: record.updated_at,
+  };
+}
+
+/**
+ * Convert database records to domain UserSkill array
+ */
+export function toUserSkills(records: UserSkillRecord[]): UserSkill[] {
+  return records.map(toUserSkill);
+}
+
+/**
+ * Leaderboard entry with rank
+ */
+export interface LeaderboardRecord {
+  chat_id: string;
+  skill_id: string;
+  level: number;
+  xp: number;
+  updated_at: number;
+  rank?: number;
+}
+
+/**
+ * Convert database LeaderboardRecord to domain LeaderboardEntry
+ */
+export function toLeaderboardEntry(record: LeaderboardRecord): LeaderboardEntry {
+  return {
+    chatId: record.chat_id,
+    skillId: record.skill_id,
+    level: record.level,
+    xp: record.xp,
+    rank: record.rank,
+  };
+}
+
+/**
+ * Convert database records to LeaderboardEntry array
+ */
+export function toLeaderboardEntries(records: LeaderboardRecord[]): LeaderboardEntry[] {
+  return records.map(toLeaderboardEntry);
 }

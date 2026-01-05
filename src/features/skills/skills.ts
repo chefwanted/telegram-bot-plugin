@@ -5,7 +5,7 @@
 
 import type { Skill, UserSkill, SkillProgress, LeaderboardEntry } from './types';
 import { SKILLS, getSkill, getLevelFromXp, getProgressToNext, getXpForLevel } from './data';
-import { getDatabase } from '../../database';
+import { getDatabase, toUserSkills, toLeaderboardEntries } from '../../database';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger({ prefix: 'Skills' });
@@ -35,7 +35,7 @@ export class SkillsService {
    * Get all skills for a user
    */
   getUserSkills(chatId: string): UserSkill[] {
-    return this.db.getSkills(chatId);
+    return toUserSkills(this.db.getSkills(chatId));
   }
 
   /**
@@ -82,7 +82,8 @@ export class SkillsService {
    * Get leaderboard
    */
   getLeaderboard(skillId?: string, limit: number = 10): LeaderboardEntry[] {
-    const entries = this.db.getLeaderboard(skillId, limit);
+    const records = this.db.getLeaderboard(skillId, limit);
+    const entries = toLeaderboardEntries(records);
 
     return entries.map((entry, index) => ({
       ...entry,

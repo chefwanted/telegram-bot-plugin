@@ -188,8 +188,8 @@ export interface RedisStorageOptions {
 }
 
 export interface DatabaseStorageOptions {
-  /** Database connection string */
-  connectionString: string;
   /** Tabel naam */
   tableName?: string;
+  /** Default TTL in seconden (default: 86400 = 24 uur) */
+  ttl?: number;
 }
