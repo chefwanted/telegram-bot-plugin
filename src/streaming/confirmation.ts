@@ -134,20 +134,25 @@ export class ConfirmationManager {
   }
 
   /**
-   * Handle callback response
-   */
-  async handleCallback(callbackData: string): Promise<boolean> {
+    * Handle callback response
+    */
+  async handleCallback(callbackData: string, callbackQueryId: string): Promise<boolean> {
     const [confirmationId, decision] = callbackData.split(':');
 
     const pending = this.pendingConfirmations.get(confirmationId);
     if (!pending) {
       logger.warn('Unknown confirmation ID', { confirmationId });
+      // Answer callback anyway to close the loading state
+      await this.api.answerCallbackQuery({
+        callback_query_id: callbackQueryId,
+        text: '❌ Confirmation expired or not found',
+      });
       return false;
     }
 
     // Answer callback query
     await this.api.answerCallbackQuery({
-      callback_query_id: callbackData, // This would need the actual callback_query_id
+      callback_query_id: callbackQueryId,
       text: decision === 'approve' ? '✅ Approved' : '❌ Rejected',
     });
 

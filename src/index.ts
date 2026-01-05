@@ -724,7 +724,7 @@ class Plugin implements ITelegramBotPlugin {
     callbackHandler.registerPrefixCallback('conf_', async (callbackQuery) => {
       const callbackData = callbackQuery.data;
       if (callbackData) {
-        await confirmationManager.handleCallback(callbackData);
+        await confirmationManager.handleCallback(callbackData, callbackQuery.id);
       }
     });
 
