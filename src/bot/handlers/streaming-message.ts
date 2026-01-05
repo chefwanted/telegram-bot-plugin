@@ -194,10 +194,17 @@ export class StreamingMessageHandler implements MessageHandler {
       const errorMessage = error instanceof Error ? error.message : 'Onbekende fout';
       const suggestions = getErrorSuggestions(errorMessage);
 
+      // Format error message with better structure
+      let errorText = `❌ *Error*\n\n${errorMessage}`;
+      
+      if (suggestions.length > 0) {
+        errorText += `\n\n💡 *Suggestions:*\n${suggestions.map(s => '• ' + s).join('\n')}`;
+      }
+
       // Send error message with suggestions
       await this.api.sendMessage({
         chat_id: chatId,
-        text: `❌ *Error:*\n${errorMessage}\n\n💡 *Suggestions:*\n${suggestions.map(s => s).join('\n')}`,
+        text: errorText,
         parse_mode: 'Markdown',
       });
 

@@ -281,19 +281,29 @@ export class ClaudeCodeService {
 
       let stdout = '';
       let stderr = '';
+      let hasOutput = false;
 
       proc.stdout.on('data', (data) => {
         stdout += data.toString();
+        hasOutput = true;
       });
 
       proc.stderr.on('data', (data) => {
         stderr += data.toString();
+        hasOutput = true;
       });
 
       // Timeout
       const timeout = setTimeout(() => {
         proc.kill('SIGTERM');
-        reject(this.createError('TIMEOUT', `Claude CLI timed out after ${this.options.timeout}ms`));
+        
+        // Provide better error message if CLI is not authenticated
+        let errorMsg = `Claude CLI timed out after ${this.options.timeout}ms`;
+        if (!hasOutput) {
+          errorMsg += '\n\n⚠️ Claude CLI may not be authenticated. Please run `claude` in your terminal to set up authentication first.';
+        }
+        
+        reject(this.createError('TIMEOUT', errorMsg));
       }, this.options.timeout);
 
       proc.on('close', (code) => {
@@ -301,6 +311,16 @@ export class ClaudeCodeService {
 
         if (code !== 0 && !stdout) {
           logger.error('Claude CLI error', { code, stderr });
+          
+          // Check for authentication errors
+          if (stderr.includes('auth') || stderr.includes('login') || stderr.includes('token')) {
+            reject(this.createError('CLI_ERROR', 
+              `Claude CLI authentication error.\n\nPlease run \`claude\` in your terminal to authenticate first.\n\nError: ${stderr}`, 
+              code ?? undefined
+            ));
+            return;
+          }
+          
           reject(this.createError('CLI_ERROR', stderr || `Claude CLI exited with code ${code}`, code ?? undefined));
           return;
         }
@@ -325,6 +345,15 @@ export class ClaudeCodeService {
       proc.on('error', (error) => {
         clearTimeout(timeout);
         logger.error('Failed to spawn Claude CLI', { error });
+        
+        // Check if binary exists
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          reject(this.createError('CLI_ERROR', 
+            `Claude CLI not found at "${this.options.cliBinary}".\n\nPlease install Claude CLI first: https://github.com/anthropics/claude-cli`
+          ));
+          return;
+        }
+        
         reject(this.createError('CLI_ERROR', `Failed to run claude: ${error.message}`));
       });
     });
@@ -354,9 +383,11 @@ export class ClaudeCodeService {
       let accumulatedText = '';
       const toolHistory: ToolUseEvent[] = [];
       let currentToolUse: ToolUseEvent | null = null;
+      let hasOutput = false;
 
       // Parse stdout line by line
       proc.stdout.on('data', (data) => {
+        hasOutput = true;
         const lines = data.toString().split('\n');
 
         for (const line of lines) {
@@ -383,13 +414,22 @@ export class ClaudeCodeService {
 
       proc.stderr.on('data', (data) => {
         stderr += data.toString();
+        hasOutput = true;
       });
 
       // Timeout
       const timeout = setTimeout(() => {
         proc.kill('SIGTERM');
-        callbacks.onError?.(new Error(`Claude CLI timed out after ${this.options.timeout}ms`));
-        reject(this.createError('TIMEOUT', `Claude CLI timed out after ${this.options.timeout}ms`));
+        
+        // Provide better error message if CLI is not authenticated
+        let errorMsg = `Claude CLI timed out after ${this.options.timeout}ms`;
+        if (!hasOutput) {
+          errorMsg += '\n\n⚠️ Claude CLI may not be authenticated. Please run `claude` in your terminal to set up authentication first.';
+        }
+        
+        const error = new Error(errorMsg);
+        callbacks.onError?.(error);
+        reject(this.createError('TIMEOUT', errorMsg));
       }, this.options.timeout);
 
       proc.on('close', (code) => {
@@ -397,6 +437,17 @@ export class ClaudeCodeService {
 
         if (code !== 0 && !accumulatedText) {
           logger.error('Claude CLI error', { code, stderr });
+          
+          // Check for authentication errors
+          if (stderr.includes('auth') || stderr.includes('login') || stderr.includes('token')) {
+            const authError = new Error(
+              `Claude CLI authentication error.\n\nPlease run \`claude\` in your terminal to authenticate first.\n\nError: ${stderr}`
+            );
+            callbacks.onError?.(authError);
+            reject(this.createError('CLI_ERROR', authError.message, code ?? undefined));
+            return;
+          }
+          
           callbacks.onError?.(new Error(stderr || `Claude CLI exited with code ${code}`));
           reject(this.createError('CLI_ERROR', stderr || `Claude CLI exited with code ${code}`, code ?? undefined));
           return;
@@ -422,6 +473,17 @@ export class ClaudeCodeService {
       proc.on('error', (error) => {
         clearTimeout(timeout);
         logger.error('Failed to spawn Claude CLI', { error });
+        
+        // Check if binary exists
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          const notFoundError = new Error(
+            `Claude CLI not found at "${this.options.cliBinary}".\n\nPlease install Claude CLI first: https://github.com/anthropics/claude-cli`
+          );
+          callbacks.onError?.(notFoundError);
+          reject(this.createError('CLI_ERROR', notFoundError.message));
+          return;
+        }
+        
         callbacks.onError?.(error);
         reject(this.createError('CLI_ERROR', `Failed to run claude: ${error.message}`));
       });

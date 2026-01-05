@@ -117,7 +117,8 @@ export class TelegramLogger {
       
       fs.appendFileSync(LOG_FILE, logLine + '\n');
     } catch (error) {
-      console.error('Failed to write to log file:', error);
+      // Fallback to stderr if file write fails
+      process.stderr.write(`Failed to write to log file: ${error}\n`);
     }
   }
 
@@ -144,7 +145,8 @@ export class TelegramLogger {
       // Rename current to .1
       fs.renameSync(LOG_FILE, path.join(LOGS_DIR, 'interactions.log.1'));
     } catch (error) {
-      console.error('Failed to rotate logs:', error);
+      // Fallback to stderr if rotation fails
+      process.stderr.write(`Failed to rotate logs: ${error}\n`);
     }
   }
 

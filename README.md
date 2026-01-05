@@ -4,26 +4,71 @@ Dit project is een Telegram Bot Plugin voor OpenCode die bidirectionele communic
 
 ## Installatie
 
-(Coming soon)
+### Vereisten
 
-## Gebruik
+- Node.js 18 of hoger
+- Claude CLI (voor AI chat functionaliteit)
+- Telegram Bot Token
+- Anthropic API Key
 
-1. Zet een `.env` met minimaal:
+### Stap 1: Installeer Dependencies
+
+```bash
+npm install
+npm run build
+```
+
+### Stap 2: Configureer Claude CLI
+
+**Belangrijk:** Claude CLI moet geauthenticeerd zijn voordat de bot werkt!
+
+```bash
+# Installeer Claude CLI (als nog niet geïnstalleerd)
+curl -fsSL https://install.claude.ai | sh
+
+# Authenticeer met je Anthropic API key
+claude
+```
+
+📖 **Zie [Claude CLI Setup Guide](docs/CLAUDE_CLI_SETUP.md) voor gedetailleerde instructies**
+
+### Stap 3: Configureer Environment
+
+Maak een `.env` bestand met minimaal:
 
 ```
 TELEGRAM_BOT_TOKEN=123:abc
-ZAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-...  # Voor Claude CLI
+ZAI_API_KEY=sk-...        # Optioneel: voor fallback AI
 ```
 
-2. Start de bot:
+### Stap 4: Start de Bot
 
-```
-npm install
-npm run build
+```bash
 node start.js
 ```
 
-3. Stuur `/start` in Telegram. Gebruik `/help` voor het menu.
+### Stap 5: Test in Telegram
+
+Stuur `/start` in Telegram. Gebruik `/help` voor het menu.
+
+## Troubleshooting
+
+### "Claude CLI timed out after 120000ms"
+
+Dit betekent dat Claude CLI niet geauthenticeerd is. Oplossing:
+
+1. Run `claude` in je terminal
+2. Volg authenticatie prompts
+3. Herstart de bot
+
+📖 **Zie [Timeout Fix Guide](docs/TIMEOUT_FIX.md) voor meer info**
+
+### Andere problemen
+
+- Check `/logs` in Telegram voor bot logs
+- Test Claude CLI: `claude --print -- "test"`
+- Verifieer config: `ls -la ~/.config/claude/`
 
 ### Nieuwe commando's
 - `/version` – toon plugin- en packageversie

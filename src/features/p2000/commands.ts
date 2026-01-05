@@ -8,6 +8,9 @@ import type { ApiMethods } from '../../api';
 import { getP2000Scraper, type P2000Scraper } from './scraper';
 import { getSubscriptionManager, type P2000SubscriptionManager } from './subscription';
 import { COMMON_UTRECHT_CITIES, getMunicipalities } from './filters';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger({ prefix: 'P2000Commands' });
 
 // Use singleton for production, but allow injection for testing
 let scraperInstance: P2000Scraper | null = null;
@@ -106,7 +109,7 @@ export async function p2000Command(api: ApiMethods, message: Message, args: stri
       parse_mode: 'Markdown',
     });
   } catch (error) {
-    console.error('P2000 command error:', error);
+    logger.error('P2000 command error', { error });
     await api.sendMessage({
       chat_id: chatId,
       text: '❌ Er is een fout opgetreden bij het ophalen van P2000 meldingen.\n\nProbeer het later opnieuw.',
@@ -190,7 +193,7 @@ export async function p2000SubscribeCommand(api: ApiMethods, message: Message, a
       });
     }
   } catch (error) {
-    console.error('Subscription command error:', error);
+    logger.error('Subscription command error', { error });
     await api.sendMessage({
       chat_id: chatId,
       text: '❌ Er is een fout opgetreden. Probeer het later opnieuw.',
@@ -215,7 +218,7 @@ export async function p2000StatsCommand(api: ApiMethods, message: Message): Prom
       parse_mode: 'Markdown',
     });
   } catch (error) {
-    console.error('Stats command error:', error);
+    logger.error('Stats command error', { error });
     await api.sendMessage({
       chat_id: chatId,
       text: '❌ Kon statistieken niet ophalen.',

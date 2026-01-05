@@ -117,6 +117,14 @@ export interface ErrorSuggestion {
 
 export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
   {
+    errorPattern: /not authenticated|authentication|auth.*error|login/i,
+    suggestions: [
+      '🔐 Run `claude` in terminal to authenticate',
+      '🔑 Check your Anthropic API key configuration',
+      '📝 Visit https://console.anthropic.com to get an API key',
+    ],
+  },
+  {
     errorPattern: /permission|denied|access/i,
     suggestions: [
       '🔑 Check file permissions with `ls -la`',
@@ -125,7 +133,7 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
     ],
   },
   {
-    errorPattern: /not found|no such file|does not exist/i,
+    errorPattern: /not found|no such file|does not exist|ENOENT/i,
     suggestions: [
       '🔍 Verify the file path is correct',
       '📂 List directory contents with `ls` or `dir`',

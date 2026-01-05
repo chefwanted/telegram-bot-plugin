@@ -153,7 +153,7 @@ export class Manager implements SessionManager {
     }
 
     if (removed > 0) {
-      console.debug(`[SessionManager] Cleaned up ${removed} expired sessions`);
+      logger.debug(`Cleaned up ${removed} expired sessions`);
     }
 
     return removed;

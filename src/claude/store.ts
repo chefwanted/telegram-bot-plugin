@@ -6,6 +6,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Conversation, ConversationMessage } from './types';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger({ prefix: 'ConversationStore' });
 
 /** Store configuration options */
 export interface ConversationStoreOptions {
@@ -74,7 +77,7 @@ export class ConversationStore {
     try {
       fs.writeFileSync(filePath, JSON.stringify(conversation, null, 2), 'utf-8');
     } catch (error) {
-      console.error(`Failed to save conversation for ${chatId}:`, error);
+      logger.error(`Failed to save conversation for ${chatId}`, { error });
     }
   }
 
@@ -86,7 +89,7 @@ export class ConversationStore {
       try {
         fs.unlinkSync(filePath);
       } catch (error) {
-        console.error(`Failed to delete conversation for ${chatId}:`, error);
+        logger.error(`Failed to delete conversation for ${chatId}`, { error });
       }
     }
   }
@@ -178,7 +181,7 @@ export class ConversationStore {
     this.cleanupTimer = setInterval(() => {
       const cleaned = this.cleanup();
       if (cleaned > 0) {
-        console.log(`[ConversationStore] Cleaned up ${cleaned} expired conversation(s)`);
+        logger.info(`Cleaned up ${cleaned} expired conversation(s)`);
       }
     }, this.cleanupIntervalMs);
   }

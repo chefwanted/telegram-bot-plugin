@@ -357,7 +357,7 @@ export class MemoryStorage implements Storage {
     }
 
     if (removed > 0) {
-      console.debug(`[MemoryStorage] Cleaned up ${removed} expired sessions`);
+      logger.debug(`Cleaned up ${removed} expired sessions`);
     }
   }
 

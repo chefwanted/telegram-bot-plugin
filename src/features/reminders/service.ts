@@ -44,7 +44,7 @@ export class ReminderService {
         });
         this.store.markSent(reminder.id);
       } catch (error) {
-        console.error(`Failed to send reminder ${reminder.id}:`, error);
+        this.logger.error(`Failed to send reminder ${reminder.id}`, { error });
       }
     }
   }

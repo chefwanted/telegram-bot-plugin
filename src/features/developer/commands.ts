@@ -84,10 +84,11 @@ export async function projectCommand(
           chat_id: chatId,
           text: `✅ Project geopend: ${ctx.name}\n📍 ${ctx.rootPath}\n\nGebruik /files om bestanden te bekijken.`,
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         await api.sendMessage({
           chat_id: chatId,
-          text: `❌ Kon project niet openen: ${error?.message || 'onbekende fout'}`,
+          text: `❌ Kon project niet openen: ${errorMessage}`,
         });
       }
       break;

@@ -162,8 +162,7 @@ export class ClaudeService {
     // Extract response text
     const text = this.extractResponseText(response);
 
-    console.log(`[ClaudeService] API call completed in ${duration}ms`);
-    console.log(`[ClaudeService] Input tokens: ${response.usage.input_tokens}, Output tokens: ${response.usage.output_tokens}`);
+    logger.debug('API call completed', { duration: `${duration}ms`, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens });
 
     return {
       text,

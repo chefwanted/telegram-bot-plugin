@@ -168,7 +168,7 @@ export class ZAIService {
   /**
    * Handle API errors and convert to appropriate error types
    */
-  private handleAPIError(statusCode: number | undefined, errorData: any): never {
+  private handleAPIError(statusCode: number | undefined, errorData: unknown): never {
     if (statusCode === 429) {
       throw new ZAIRateLimitError(errorData.error?.message || 'Rate limit exceeded');
     }
