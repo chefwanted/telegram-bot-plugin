@@ -14,18 +14,9 @@ import { createCallbackHandler } from './bot/handlers/callback';
 import { SimpleMessageHandler } from './bot/handlers/message';
 import { createStreamingMessageHandler } from './bot/handlers/streaming-message';
 import { getConfirmationManager } from './streaming/confirmation';
-import {
-  helpCommand,
-  DEFAULT_COMMANDS,
-  startCommand,
-  statusCommand,
-  registerAgentCallbacks,
-} from './bot/commands';
-import {
-  claudeStartCommand,
-  claudeStatusCommand,
-  claudeHelpCommand,
-} from './bot/commands/claude';
+import { helpCommand, DEFAULT_COMMANDS, startCommand } from './bot/commands';
+import { statusCommand } from './bot/commands/status';
+import { registerAgentCallbacks } from './bot/commands/agent';
 import { ZAIService } from './zai';
 import { closeDatabase } from './database';
 
@@ -294,17 +285,17 @@ class Plugin implements ITelegramBotPlugin {
     const commandHandler = createCommandHandler(api);
 
     // ==========================================================================
-    // Claude Commands
+    // Core Commands
     // ==========================================================================
 
     commandHandler.registerCommand('/start', async (message, _args) => {
       trackCommand('/start', String(message.chat.id));
-      await claudeStartCommand(api, message);
+      await startCommand(api, message);
     });
 
     commandHandler.registerCommand('/help', async (message, _args) => {
       trackCommand('/help', String(message.chat.id));
-      await claudeHelpCommand(api, message);
+      await helpCommand(api, message);
     });
 
     commandHandler.registerCommand('/version', async (message, _args) => {
