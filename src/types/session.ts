@@ -31,9 +31,9 @@ export interface SessionData {
   lastCommand?: string;
   /** Agent gerelateerde state */
   agentState?: AgentState;
-  ** User specifieke preferences */
+  /** User specifieke preferences */
   preferences?: UserPreferences;
-  ** Tijdelijke data voor huidige interactie */
+  /** Tijdelijke data voor huidige interactie */
   temporary?: Record<string, unknown>;
 }
 
