@@ -439,6 +439,7 @@ export class TelegramBot {
         { command: 'folder', description: '📁 Folders' },
         { command: 'skills', description: '🎯 Skills XP' },
         { command: 'leaderboard', description: '🏆 Leaderboard' },
+        { command: 'tool', description: '🔧 Custom tools' },
       ], 'all_private_chats');
       this.logger.info('Bot commands registered');
     } catch (error) {

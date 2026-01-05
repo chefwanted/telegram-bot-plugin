@@ -100,6 +100,9 @@ import {
   leaderboardCommand,
 } from './features/skills';
 
+// Custom Tools
+import { customToolCommand } from './features/custom-tools';
+
 // Version & update info
 import { formatVersionMessage, formatUpdateMessage, formatChangelogMessage } from './utils/version';
 
@@ -578,6 +581,15 @@ class Plugin implements ITelegramBotPlugin {
     commandHandler.registerCommand('/leaderboard', async (message, args) => {
       trackCommand('/leaderboard', String(message.chat.id));
       await leaderboardCommand(api, message, args);
+    });
+
+    // ==========================================================================
+    // Custom Tools Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/tool', async (message, args) => {
+      trackCommand('/tool', String(message.chat.id));
+      await customToolCommand(api, message, args);
     });
 
     // ==========================================================================
