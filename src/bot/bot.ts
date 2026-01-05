@@ -207,23 +207,15 @@ export class TelegramBot {
       params.offset = this.state.lastUpdateId + 1;
     }
 
-    if (this.options?.polling?.timeout) {
-      params.timeout = this.options.polling.timeout / 1000; // Convert to seconds
-    }
-
-    const response = await this.client.call<{ result: Update[] }>(
-      'getUpdates',
-      params
-    );
-
-    const updates = response.result || [];
+    // Call returns response.data.result directly, which is Update[]
+    const updates = await this.client.call<Update[]>('getUpdates', params);
 
     // Update last update ID
-    if (updates.length > 0) {
+    if (updates && updates.length > 0) {
       this.state.lastUpdateId = updates[updates.length - 1].update_id;
     }
 
-    return updates;
+    return updates || [];
   }
 
   // ==========================================================================
