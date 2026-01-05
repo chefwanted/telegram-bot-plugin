@@ -40,6 +40,33 @@ export interface AnswerCallbackQueryResponse {
   boolean: true;
 }
 
+export interface AnswerInlineQueryResponse {
+  boolean: true;
+}
+
+// =============================================================================
+// Inline Query Types
+// =============================================================================
+
+export interface InlineQueryResult {
+  id: string;
+  type: 'article' | 'photo' | 'gif' | 'mpeg4_gif' | 'video' | 'audio' | 'voice' | 'document' | 'location' | 'contact' | 'game';
+  title?: string;
+  description?: string;
+  input_message_content: {
+    message_text: string;
+    parse_mode?: 'Markdown' | 'MarkdownV2' | 'HTML';
+  };
+}
+
+export interface AnswerInlineQueryRequest {
+  inline_query_id: string;
+  results: InlineQueryResult[];
+  cache_time?: number;
+  is_personal?: boolean;
+  next_offset?: string;
+}
+
 export interface GetMeResponse {
   id: number;
   is_bot: boolean;

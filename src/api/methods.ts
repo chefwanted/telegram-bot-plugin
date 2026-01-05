@@ -13,9 +13,11 @@ import type {
   SendMessageRequest,
   EditMessageTextRequest,
   AnswerCallbackQueryRequest,
+  AnswerInlineQueryRequest,
   SendMessageResponse,
   EditMessageTextResponse,
   AnswerCallbackQueryResponse,
+  AnswerInlineQueryResponse,
   GetMeResponse,
   GetChatResponse,
   SetMyCommandsRequest,
@@ -80,6 +82,18 @@ export class ApiMethods {
   ): Promise<AnswerCallbackQueryResponse> {
     return this.client.call<AnswerCallbackQueryResponse>(
       'answerCallbackQuery',
+      request as unknown as Record<string, unknown>
+    );
+  }
+
+  /**
+   * Beantwoord inline query
+   */
+  async answerInlineQuery(
+    request: AnswerInlineQueryRequest
+  ): Promise<AnswerInlineQueryResponse> {
+    return this.client.call<AnswerInlineQueryResponse>(
+      'answerInlineQuery',
       request as unknown as Record<string, unknown>
     );
   }

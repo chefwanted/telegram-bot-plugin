@@ -69,7 +69,22 @@ import { searchCommand } from './features/search';
 import { triviaCommand, triviaAnswerCommand, tttCommand, tttMoveCommand } from './features/games';
 
 // Files
-import { fileListCommand, fileDeleteCommand } from './features/files';
+import {
+  fileListCommand,
+  fileDeleteCommand,
+  fileMoveCommand,
+} from './features/files';
+import {
+  folderListCommand,
+  folderCreateCommand,
+} from './features/files';
+import {
+  gitInitCommand,
+  gitStatusCommand,
+  gitAddCommand,
+  gitCommitCommand,
+  gitLogCommand,
+} from './features/files';
 
 // Groups
 import {
@@ -81,6 +96,27 @@ import {
   groupReadCommand,
   groupDiscoverCommand,
 } from './features/groups';
+
+// News
+import {
+  newsCommand,
+  newsSearchCommand,
+  newsSourcesCommand,
+} from './features/news';
+
+// P2000
+import {
+  p2000Command,
+  p2000SubscribeCommand,
+  p2000HelpCommand,
+} from './features/p2000';
+
+// Skills
+import {
+  skillsCommand,
+  skillInfoCommand,
+  leaderboardCommand,
+} from './features/skills';
 
 // =============================================================================
 // Plugin Interface
@@ -94,7 +130,7 @@ export interface ITelegramBotPlugin {
   stop(): Promise<void>;
 
   /** Get plugin state */
-  getState(): PluginState;
+  getState(): Promise<PluginState>;
 
   /** Get event dispatcher */
   getEventDispatcher(): EventDispatcher;
@@ -214,8 +250,8 @@ class Plugin implements ITelegramBotPlugin {
     this.logger.info('Plugin stopped');
   }
 
-  getState(): PluginState {
-    return this.bot.getState();
+  async getState(): Promise<PluginState> {
+    return await this.bot.getState();
   }
 
   getEventDispatcher(): EventDispatcher {
@@ -421,13 +457,59 @@ class Plugin implements ITelegramBotPlugin {
       trackCommand('/file', String(message.chat.id));
       const action = args[0];
       if (action === 'list') {
-        await fileListCommand(api, message);
+        await fileListCommand(api, message, args.slice(1));
       } else if (action === 'delete') {
         await fileDeleteCommand(api, message, args.slice(1));
+      } else if (action === 'move') {
+        await fileMoveCommand(api, message, args.slice(1));
       } else {
         await api.sendMessage({
           chat_id: message.chat.id,
-          text: '📎 Bestanden:\n/file list - Toon bestanden\n/file delete <id> - Verwijder bestand\n\nStuur een bestand naar de chat om op te slaan.',
+          text: '📎 Bestanden:\n/file list [folder] - Toon bestanden\n/file delete <id> - Verwijder bestand\n/file move <id> <folder> - Verplaats bestand\n\nStuur een bestand naar de chat om op te slaan.',
+        });
+      }
+    });
+
+    // ==========================================================================
+    // Folder Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/folder', async (message, args) => {
+      trackCommand('/folder', String(message.chat.id));
+      const action = args[0];
+      if (action === 'list') {
+        await folderListCommand(api, message);
+      } else if (action === 'create') {
+        await folderCreateCommand(api, message, args.slice(1));
+      } else {
+        await api.sendMessage({
+          chat_id: message.chat.id,
+          text: '📁 Folders:\n/folder list - Toon folders\n/folder create <naam> - Maak folder',
+        });
+      }
+    });
+
+    // ==========================================================================
+    // Git Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/git', async (message, args) => {
+      trackCommand('/git', String(message.chat.id));
+      const action = args[0];
+      if (action === 'init') {
+        await gitInitCommand(api, message);
+      } else if (action === 'status') {
+        await gitStatusCommand(api, message);
+      } else if (action === 'add') {
+        await gitAddCommand(api, message, args.slice(1));
+      } else if (action === 'commit') {
+        await gitCommitCommand(api, message, args.slice(1));
+      } else if (action === 'log') {
+        await gitLogCommand(api, message, args.slice(1));
+      } else {
+        await api.sendMessage({
+          chat_id: message.chat.id,
+          text: '📦 Git versiebeheer:\n/git init - Start repository\n/git status - Toon status\n/git add [bestanden] - Voeg toe aan staging\n/git commit <bericht> - Maak commit\n/git log [aantal] - Toon geschiedenis',
         });
       }
     });
@@ -459,6 +541,58 @@ class Plugin implements ITelegramBotPlugin {
           text: '👥 Groepen:\n/group create <naam> - Maak groep\n/group list - Jouw groepen\n/group join <id> - Join groep\n/group leave <id> - Verlaat groep\n/group post <id>|<tekst>|[anon] - Plaats bericht\n/group read <id> [aantal] - Lees berichten\n/group discover - Ontdek groepen',
         });
       }
+    });
+
+    // ==========================================================================
+    // News Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/news', async (message, args) => {
+      trackCommand('/news', String(message.chat.id));
+      await newsCommand(api, message, args);
+    });
+
+    commandHandler.registerCommand('/news-search', async (message, args) => {
+      trackCommand('/news-search', String(message.chat.id));
+      await newsSearchCommand(api, message, args);
+    });
+
+    commandHandler.registerCommand('/news-sources', async (message, _args) => {
+      trackCommand('/news-sources', String(message.chat.id));
+      await newsSourcesCommand(api, message);
+    });
+
+    // ==========================================================================
+    // P2000 Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/p2000', async (message, args) => {
+      trackCommand('/p2000', String(message.chat.id));
+      await p2000Command(api, message, args);
+    });
+
+    commandHandler.registerCommand('/p2000-subscribe', async (message, args) => {
+      trackCommand('/p2000-subscribe', String(message.chat.id));
+      await p2000SubscribeCommand(api, message, args);
+    });
+
+    // ==========================================================================
+    // Skills Commands
+    // ==========================================================================
+
+    commandHandler.registerCommand('/skills', async (message, _args) => {
+      trackCommand('/skills', String(message.chat.id));
+      await skillsCommand(api, message);
+    });
+
+    commandHandler.registerCommand('/skill-info', async (message, args) => {
+      trackCommand('/skill-info', String(message.chat.id));
+      await skillInfoCommand(api, message, args);
+    });
+
+    commandHandler.registerCommand('/leaderboard', async (message, args) => {
+      trackCommand('/leaderboard', String(message.chat.id));
+      await leaderboardCommand(api, message, args);
     });
 
     // ==========================================================================

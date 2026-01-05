@@ -35,6 +35,7 @@ const DEFAULT_RETRY_DELAY = 1000; // 1 seconde
 export class ApiClient {
   private axios: AxiosInstance;
   private config: Required<RequestConfig>;
+  private callCount: number = 0;
 
   constructor(
     private botToken: string,
@@ -59,6 +60,7 @@ export class ApiClient {
     method: string,
     params?: Record<string, unknown>
   ): Promise<T> {
+    this.callCount++;
     const url = `/bot${this.botToken}/${method}`;
     let lastError: Error | undefined;
 
@@ -103,6 +105,7 @@ export class ApiClient {
     method: string,
     params?: Record<string, unknown>
   ): Promise<T> {
+    this.callCount++;
     const url = `/bot${this.botToken}/${method}`;
 
     try {
@@ -141,6 +144,7 @@ export class ApiClient {
     method: string,
     formData: Record<string, string | Buffer | Blob>
   ): Promise<T> {
+    this.callCount++;
     const url = `/bot${this.botToken}/${method}`;
 
     try {
@@ -235,6 +239,20 @@ export class ApiClient {
    */
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Get total API call count
+   */
+  getCallCount(): number {
+    return this.callCount;
+  }
+
+  /**
+   * Reset API call counter
+   */
+  resetCallCount(): void {
+    this.callCount = 0;
   }
 
   /**

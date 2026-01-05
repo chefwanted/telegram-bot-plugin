@@ -13,6 +13,7 @@ import type { MessageHandler } from './handlers/message';
 import type { CommandHandler } from './handlers/command';
 import type { CallbackHandler } from './handlers/callback';
 import type { ZAIService } from '../zai';
+import { routeInlineQuery, type InlineContext } from '../features/inline';
 
 // =============================================================================
 // Bot Options
@@ -52,6 +53,7 @@ export class TelegramBot {
   private api: ApiMethods;
   private sessionManager: SessionManager;
   private zaiService?: ZAIService;
+  private pluginOptions?: PluginOptions;
   private logger = createLogger({ prefix: 'Bot' });
 
   private state: BotStateInternal = {
@@ -64,6 +66,8 @@ export class TelegramBot {
       totalErrors: 0,
     },
   };
+
+  private startedAt?: Date;
 
   private pollingTimer?: NodeJS.Timeout;
   private messageHandler?: MessageHandler;
@@ -85,6 +89,9 @@ export class TelegramBot {
     // Store Z.ai service
     this.zaiService = options.zaiService;
 
+    // Store plugin options
+    this.pluginOptions = options.options;
+
     this.logger.info('Bot initialized');
   }
 
@@ -102,6 +109,7 @@ export class TelegramBot {
     }
 
     this.state.isRunning = true;
+    this.startedAt = new Date();
 
     try {
       // Verify bot token
@@ -131,6 +139,7 @@ export class TelegramBot {
     }
 
     this.state.isRunning = false;
+    this.startedAt = undefined;
 
     // Stop polling
     if (this.pollingTimer) {
@@ -250,7 +259,7 @@ export class TelegramBot {
 
       // Inline query
       else if (update.inline_query) {
-        this.logger.debug('Inline query not implemented');
+        await this.processInlineQuery(update.inline_query);
       }
     } catch (error) {
       this.state.stats.totalErrors++;
@@ -287,6 +296,39 @@ export class TelegramBot {
   private async processCallbackQuery(callbackQuery: import('../types/telegram').CallbackQuery): Promise<void> {
     if (this.callbackHandler) {
       await this.callbackHandler.handle(callbackQuery);
+    }
+  }
+
+  /**
+   * Verwerk inline query
+   */
+  private async processInlineQuery(inlineQuery: import('../types/telegram').InlineQuery): Promise<void> {
+    try {
+      const context: InlineContext = {
+        query: inlineQuery.query || '',
+        userId: inlineQuery.from.id,
+        chatId: inlineQuery.chat?.id,
+      };
+
+      const results = await routeInlineQuery(context);
+
+      await this.api.answerInlineQuery({
+        inline_query_id: inlineQuery.id,
+        results: results as any[],
+        cache_time: 300,
+        is_personal: false,
+      });
+
+      this.logger.debug(`Inline query processed: ${context.query}`);
+    } catch (error) {
+      this.logger.error('Inline query error', { error, query: inlineQuery.query });
+
+      // Send empty results on error
+      await this.api.answerInlineQuery({
+        inline_query_id: inlineQuery.id,
+        results: [],
+        cache_time: 60,
+      });
     }
   }
 
@@ -362,10 +404,19 @@ export class TelegramBot {
         // Games
         { command: 'trivia', description: '🎮 Trivia spel' },
         { command: 'ttt', description: '🎮 Tic Tac Toe' },
-        // Files
-        { command: 'file', description: '📎 Bestanden' },
+        // Files & Folders
+        { command: 'file', description: '📎 Bestanden beheren' },
+        { command: 'folder', description: '📁 Folders' },
+        { command: 'git', description: '📦 Git versiebeheer' },
         // Groups
         { command: 'group', description: '👥 Groepen' },
+        // News
+        { command: 'news', description: '📰 Nieuws' },
+        // P2000
+        { command: 'p2000', description: '🚨 112 Meldingen Utrecht' },
+        // Skills
+        { command: 'skills', description: '🎯 Jouw skills' },
+        { command: 'leaderboard', description: '🏆 Leaderboard' },
         // System
         { command: 'status', description: 'Bot status' },
       ], 'all_private_chats');
@@ -429,18 +480,21 @@ export class TelegramBot {
     return { ...this.state.stats };
   }
 
-  getState(): PluginState {
+  async getState(): Promise<PluginState> {
+    const sessionCount = await this.sessionManager.count();
+    const apiCalls = this.client.getCallCount();
+
     return {
       isStarted: this.state.isRunning,
       isPolling: this.state.isPolling,
-      sessionCount: 0, // TODO: Get from session manager
-      startedAt: undefined, // TODO: Track start time
+      sessionCount,
+      startedAt: this.startedAt,
       lastUpdateAt: undefined,
       stats: {
         totalUpdates: this.state.stats.totalUpdates,
         totalMessages: this.state.stats.totalMessages,
         totalCommands: this.state.stats.totalCommands,
-        totalApiCalls: 0, // TODO: Track API calls
+        totalApiCalls: apiCalls,
         totalErrors: this.state.stats.totalErrors,
         lastResetAt: new Date(),
       },
@@ -449,7 +503,7 @@ export class TelegramBot {
 
   // Private getter for options
   private get options(): PluginOptions | undefined {
-    return undefined; // TODO: Store options in constructor
+    return this.pluginOptions;
   }
 }
 
