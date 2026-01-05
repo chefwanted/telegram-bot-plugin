@@ -11,6 +11,9 @@ import type {
 } from '../types/session';
 import type { Storage } from '../types/session';
 import { createStorage } from './storage';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger({ prefix: 'SessionManager' });
 
 // =============================================================================
 // Default Options

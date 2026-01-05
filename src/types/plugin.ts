@@ -14,6 +14,8 @@ export interface PluginConfig {
   anthropicApiKey?: string;
   /** Z.ai API key for GLM-4.7 integration */
   zaiApiKey?: string;
+  /** MiniMax API key for MiniMax v2.1 integration */
+  miniMaxApiKey?: string;
   /** Plugin opties */
   options?: PluginOptions;
 }

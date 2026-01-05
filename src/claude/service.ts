@@ -15,6 +15,9 @@ import {
 } from './types';
 import { ConversationStore } from './store';
 import { DEFAULT_SYSTEM_PROMPT } from './prompts';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger({ prefix: 'ClaudeService' });
 
 // Types for Anthropic API (defined locally to avoid import issues)
 type MessageParam = {
@@ -186,10 +189,12 @@ export class ClaudeService {
   /**
    * Extract text from Anthropic response
    */
-  private extractResponseText(response: any): string {
+  private extractResponseText(response: {
+    content?: Array<{ type?: string; text?: string }>;
+  }): string {
     const content = response.content?.[0];
 
-    if (content?.type === 'text') {
+    if (content?.type === 'text' && content.text) {
       return content.text;
     }
 

@@ -78,9 +78,13 @@ export async function fileDeleteCommand(api: ApiMethods, message: Message, args:
 }
 
 // Handle incoming document/photo messages
-export async function handleFileUpload(api: ApiMethods, message: Message, fileService: any): Promise<void> {
-  const document = (message as any).document;
-  const photo = (message as any).photo;
+export async function handleFileUpload(
+  api: ApiMethods,
+  message: Message,
+  fileService: { saveFile: (file: unknown) => Promise<void> }
+): Promise<void> {
+  const document = (message as Message & { document?: unknown }).document;
+  const photo = (message as Message & { photo?: unknown }).photo;
 
   if (!document && !photo) {
     return;

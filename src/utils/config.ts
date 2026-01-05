@@ -33,6 +33,8 @@ export function loadConfig(): Partial<PluginConfig> {
     botToken: process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN,
     // Prefer Z.ai API key over Anthropic
     zaiApiKey: process.env.ZAI_API_KEY || process.env.ANTHROPIC_API_KEY,
+    // MiniMax API key (additional fallback)
+    miniMaxApiKey: process.env.MINIMAX_API_KEY,
     options: loadOptions(),
   };
 

@@ -7,12 +7,14 @@ import type {
   Storage,
   Session,
   SessionData,
-} from '../types/session';
-import type {
+  SessionOptions,
   MemoryStorageOptions,
   DatabaseStorageOptions,
 } from '../types/session';
 import { getDatabase } from '../database';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger({ prefix: 'SessionStorage' });
 
 // =============================================================================
 // Database Storage

@@ -101,15 +101,15 @@ export function getUserFiles(chatId: string, folder?: string): StoredFile[] {
   const db = getDatabase();
   const dbFiles = db.getFiles(chatId, folder);
 
-  return dbFiles.map((f: any) => ({
+  return dbFiles.map((f) => ({
     id: f.file_id,
     chatId: f.chat_id,
     fileName: f.file_name,
-    fileSize: f.file_size,
-    mimeType: f.mime_type,
+    fileSize: f.file_size || 0,
+    mimeType: f.mime_type || '',
     filePath: '', // Not stored in DB
-    folder: f.folder,
-    uploadedAt: f.created_at,
+    folder: f.folder || '',
+    uploadedAt: new Date(f.created_at).getTime(),
   }));
 }
 

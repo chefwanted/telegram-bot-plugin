@@ -169,17 +169,24 @@ export class ZAIService {
    * Handle API errors and convert to appropriate error types
    */
   private handleAPIError(statusCode: number | undefined, errorData: unknown): never {
+    // Type guard for error data
+    const hasErrorMessage = (data: unknown): data is { error: { message?: string; code?: string } } => {
+      return typeof data === 'object' && data !== null && 'error' in data;
+    };
+
     if (statusCode === 429) {
-      throw new ZAIRateLimitError(errorData.error?.message || 'Rate limit exceeded');
+      const message = hasErrorMessage(errorData) ? errorData.error?.message || 'Rate limit exceeded' : 'Rate limit exceeded';
+      throw new ZAIRateLimitError(message);
     }
 
     if (statusCode === 400) {
-      throw new ZAIContentFilterError(errorData.error?.message || 'Content was filtered');
+      const message = hasErrorMessage(errorData) ? errorData.error?.message || 'Content was filtered' : 'Content was filtered';
+      throw new ZAIContentFilterError(message);
     }
 
     throw new ZAIServiceError(
-      errorData.error?.message || `API error: ${statusCode}`,
-      errorData.error?.code
+      hasErrorMessage(errorData) ? errorData.error?.message || `API error: ${statusCode}` : `API error: ${statusCode}`,
+      hasErrorMessage(errorData) ? errorData.error?.code : undefined
     );
   }
 

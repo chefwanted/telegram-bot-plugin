@@ -98,8 +98,9 @@ export async function gitStatus(chatId: string): Promise<GitStatus | null> {
     }
 
     return status;
-  } catch (error: any) {
-    logger.error('Git status error', { error: error.message });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Git status error', { error: errorMessage });
     return null;
   }
 }
@@ -112,8 +113,9 @@ export async function gitAdd(chatId: string, files?: string[]): Promise<boolean>
     await execAsync(`git add ${filesToAdd}`, { cwd: userDir });
     logger.info(`Git add: ${filesToAdd} for ${chatId}`);
     return true;
-  } catch (error: any) {
-    logger.error('Git add error', { error: error.message });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Git add error', { error: errorMessage });
     return false;
   }
 }
@@ -159,8 +161,9 @@ export async function gitLog(chatId: string, limit: number = 10): Promise<GitCom
     }
 
     return commits;
-  } catch (error: any) {
-    logger.error('Git log error', { error: error.message });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Git log error', { error: errorMessage });
     return [];
   }
 }

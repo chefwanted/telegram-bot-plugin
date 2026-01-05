@@ -128,7 +128,11 @@ export class NewsService {
   /**
    * Extract image URL from RSS item
    */
-  private extractImageUrl(item: any): string | undefined {
+  private extractImageUrl(item: {
+    enclosure?: { type?: string; url?: string };
+    'media:content'?: { $?: { url?: string } };
+    'media:thumbnail'?: { $?: { url?: string } };
+  }): string | undefined {
     // Try different fields where images might be stored
     if (item.enclosure && item.enclosure.type?.startsWith('image/')) {
       return item.enclosure.url;

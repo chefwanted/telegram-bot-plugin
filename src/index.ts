@@ -19,6 +19,7 @@ import { statusCommand } from './bot/commands/status';
 import { registerAgentCallbacks } from './bot/commands/agent';
 import { telegramLogger, LogLevel } from './utils/telegram-logger';
 import { ZAIService } from './zai';
+import { MiniMaxService } from './minimax';
 import { closeDatabase } from './database';
 
 // Claude Code CLI integration
@@ -148,6 +149,7 @@ class Plugin implements ITelegramBotPlugin {
   private logger: Logger;
   private config: PluginConfig;
   private zaiService?: ZAIService;
+  private miniMaxService?: MiniMaxService;
   private claudeCodeService: ClaudeCodeService;
   private reminderService?: ReminderService;
 
@@ -164,7 +166,7 @@ class Plugin implements ITelegramBotPlugin {
       workingDir: process.env.CLAUDE_WORKING_DIR || process.cwd(),
       cliBinary: process.env.CLAUDE_CLI_BINARY || 'claude',
       model: process.env.CLAUDE_MODEL,
-      timeout: parseInt(process.env.CLAUDE_TIMEOUT || '120000', 10),
+      timeout: parseInt(process.env.CLAUDE_TIMEOUT || '300000', 10), // 5 minuten
       systemPrompt: process.env.CLAUDE_SYSTEM_PROMPT,
     });
     this.logger.info('Claude Code service initialized');
@@ -181,6 +183,17 @@ class Plugin implements ITelegramBotPlugin {
 
       // Set for search feature
       setSearchClaudeService(this.zaiService as any); // Type compatibility
+    }
+
+    // Create MiniMax service as additional fallback if API key is available
+    if (config.miniMaxApiKey) {
+      this.miniMaxService = new MiniMaxService({
+        apiKey: config.miniMaxApiKey,
+        model: 'MiniMax-v2.1',
+        maxTokens: config.options?.claude?.maxTokens,
+        temperature: config.options?.claude?.temperature,
+      });
+      this.logger.info('MiniMax service initialized (v2.1 + Lite fallback)');
     }
 
     // Create bot

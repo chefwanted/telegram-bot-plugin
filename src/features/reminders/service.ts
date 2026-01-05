@@ -5,6 +5,9 @@
 import type { ApiMethods } from '../../api';
 import type { Reminder } from './types';
 import { FileReminderStore } from './store';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger({ prefix: 'ReminderService' });
 
 export class ReminderService {
   private store = new FileReminderStore();
@@ -44,7 +47,7 @@ export class ReminderService {
         });
         this.store.markSent(reminder.id);
       } catch (error) {
-        this.logger.error(`Failed to send reminder ${reminder.id}`, { error });
+        logger.error(`Failed to send reminder ${reminder.id}`, { error });
       }
     }
   }

@@ -496,7 +496,6 @@ export class ClaudeCodeService {
   private buildCliArgs(message: string, session: ClaudeCodeSession): string[] {
     const args: string[] = [
       '--print',           // Print response only (no interactive)
-      '--output-format', 'json',  // JSON output for parsing
     ];
 
     // Resume session if we have one with messages
@@ -512,16 +511,6 @@ export class ClaudeCodeService {
     // Max tokens
     if (this.options.maxTokens) {
       args.push('--max-turns', '1'); // Single turn for Telegram
-    }
-
-    // Allowed tools
-    for (const tool of this.options.allowedTools) {
-      args.push('--allowedTools', tool);
-    }
-
-    // Denied tools
-    for (const tool of this.options.deniedTools) {
-      args.push('--disallowedTools', tool);
     }
 
     // System prompt
