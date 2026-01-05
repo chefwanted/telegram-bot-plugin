@@ -75,9 +75,24 @@ export class ClaudeCodeService {
       const result = await this.runClaudeCli(message, session);
       const durationMs = Date.now() - startTime;
 
-      // Update session
+      // Update session with token usage
       session.messageCount++;
       session.lastActivityAt = new Date();
+
+      if (result.cost) {
+        if (!session.tokenUsage) {
+          session.tokenUsage = {
+            totalInputTokens: 0,
+            totalOutputTokens: 0,
+            totalTokens: 0,
+            totalCostUSD: 0,
+          };
+        }
+        session.tokenUsage.totalInputTokens += result.cost.inputTokens || 0;
+        session.tokenUsage.totalOutputTokens += result.cost.outputTokens || 0;
+        session.tokenUsage.totalTokens += (result.cost.inputTokens || 0) + (result.cost.outputTokens || 0);
+      }
+
       await this.storage.saveSession(session);
 
       return {

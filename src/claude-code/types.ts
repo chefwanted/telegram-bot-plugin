@@ -49,6 +49,14 @@ export interface ClaudeCodeSession {
   workingDir: string;
   /** Whether session is currently active for this chat */
   isActive: boolean;
+  /** Token usage tracking */
+  tokenUsage?: {
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalTokens: number;
+    totalCostUSD: number;
+    lastTokenCount?: number;
+  };
 }
 
 export interface SessionStorage {

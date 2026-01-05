@@ -7,7 +7,7 @@ import type { Message } from '../../types/telegram';
 import type { ApiMethods } from '../../api';
 import { createLogger } from '../../utils/logger';
 import type { ClaudeCodeService } from '../../claude-code/service';
-import { StreamStatus, type ToolUseEvent, type ToolResultEvent } from '../../streaming/types';
+import { StreamStatus, type ToolUseEvent, type ToolResultEvent, getErrorSuggestions } from '../../streaming/types';
 import { MessageStreamer } from '../../streaming/message-stream';
 import { getStatusManager } from '../../streaming/status';
 import { getToolVisibilityManager } from '../../streaming/tool-visibility';
@@ -158,6 +158,16 @@ export class StreamingMessageHandler implements MessageHandler {
           logger.error('Stream error', { error, chatId });
           this.statusManager.updateStatus(String(chatId), StreamStatus.ERROR, error.message);
           await this.updateStatusMessage(chatId, statusMessageId);
+
+          // Send error with suggestions
+          const suggestions = getErrorSuggestions(error.message);
+          const errorMessage = `❌ *Error:*\n${error.message}\n\n${suggestions.map(s => s).join('\n')}`;
+
+          await this.api.sendMessage({
+            chat_id: chatId,
+            text: errorMessage,
+            parse_mode: 'Markdown',
+          });
         },
 
         onComplete: async (result) => {
@@ -179,10 +189,14 @@ export class StreamingMessageHandler implements MessageHandler {
     } catch (error) {
       logger.error('Error handling streaming message', { error, chatId });
 
-      // Send error message
+      const errorMessage = error instanceof Error ? error.message : 'Onbekende fout';
+      const suggestions = getErrorSuggestions(errorMessage);
+
+      // Send error message with suggestions
       await this.api.sendMessage({
         chat_id: chatId,
-        text: `❌ Er is een fout opgetreden: ${error instanceof Error ? error.message : 'Onbekende fout'}`,
+        text: `❌ *Error:*\n${errorMessage}\n\n💡 *Suggestions:*\n${suggestions.map(s => s).join('\n')}`,
+        parse_mode: 'Markdown',
       });
 
       // Clean up
